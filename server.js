@@ -7,15 +7,19 @@ const helmet = require('helmet');
 const app = express();
 app.set('trust proxy', 1);
 
+// ====================== CONFIGURACIÓN ======================
 const PANEL_PASSWORD = "CambiaEstaContraseña123!"; // ← CAMBIA ESTA CONTRASEÑA
+const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1535376671744598056/-2alJ6mcPK8LteyAq-75vL1StGuh3wEGlnwSl2jNfUDbVVNe4an8oHD2rZW9N-390KgS";
 const PORT = process.env.PORT || 3000;
 
+// ====================== SEGURIDAD ======================
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '2mb' }));
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
 app.use('/api/', limiter);
 
+// ====================== BASE DE DATOS ======================
 mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3VZH9aXK77wX@ikgmxer.8tj7kfa.mongodb.net/hubsilent?appName=ikgmxer")
     .then(() => console.log("🔥 Ikgonavi Hub Pro activo"))
     .catch(err => console.error("Error DB:", err));
@@ -27,6 +31,28 @@ const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }));
 
+// ====================== DISCORD LOGGER ======================
+async function sendDiscordLog(title, description, color = 0x5865F2) {
+    try {
+        await fetch(DISCORD_WEBHOOK, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                embeds: [{
+                    title: title,
+                    description: description,
+                    color: color,
+                    timestamp: new Date().toISOString(),
+                    footer: { text: "Ikgonavi Hub Pro • Logs" }
+                }]
+            })
+        });
+    } catch (err) {
+        console.error("Error enviando log a Discord:", err.message);
+    }
+}
+
+// ====================== OFUSCADOR ======================
 function obfuscate(rawCode) {
     const encoded = Buffer.from(rawCode, 'utf8').toString('base64');
     const r = () => crypto.randomBytes(3).toString('hex');
@@ -66,6 +92,7 @@ function requireAuth(req, res, next) {
     next();
 }
 
+// ====================== PANEL ======================
 app.get('/', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -83,7 +110,6 @@ app.get('/', (req, res) => {
 </head>
 <body class="text-gray-100 min-h-screen">
 
-<!-- LOGIN -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
     <div class="glass w-full max-w-md p-8 rounded-2xl">
         <div class="text-center mb-8">
@@ -100,9 +126,7 @@ app.get('/', (req, res) => {
     </div>
 </div>
 
-<!-- DASHBOARD -->
 <div id="dashboard" class="hidden min-h-screen">
-    <!-- Sidebar -->
     <div class="flex">
         <aside class="w-64 glass min-h-screen p-5 flex flex-col fixed left-0 top-0">
             <div class="flex items-center gap-3 mb-10 px-2">
@@ -130,10 +154,9 @@ app.get('/', (req, res) => {
             </button>
         </aside>
 
-        <!-- Contenido -->
         <main class="ml-64 flex-1 p-8">
             
-            <!-- PÁGINA: OFUSCADOR -->
+            <!-- OFUSCADOR -->
             <div id="page-obfuscator" class="page">
                 <h2 class="text-2xl font-bold mb-1">Ofuscador</h2>
                 <p class="text-zinc-400 text-sm mb-8">Pega tu código Lua y ofúscalo automáticamente</p>
@@ -170,7 +193,7 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
-            <!-- PÁGINA: SCRIPTS -->
+            <!-- SCRIPTS -->
             <div id="page-scripts" class="page hidden">
                 <div class="flex justify-between items-center mb-8">
                     <div>
@@ -185,7 +208,7 @@ app.get('/', (req, res) => {
                 </div>
             </div>
 
-            <!-- PÁGINA: EDITAR -->
+            <!-- EDITAR -->
             <div id="page-edit" class="page hidden">
                 <h2 class="text-2xl font-bold mb-1">Editar Scripts</h2>
                 <p class="text-zinc-400 text-sm mb-8">Selecciona un script para reemplazar su código</p>
@@ -277,7 +300,6 @@ async function loadScripts() {
 
         document.getElementById('scriptCount').innerText = allScripts.length + ' scripts';
 
-        // Lista de scripts
         const list = document.getElementById('scriptsList');
         if (allScripts.length === 0) {
             list.innerHTML = '<p class="text-zinc-500 text-center py-16">No hay scripts todavía</p>';
@@ -302,7 +324,6 @@ async function loadScripts() {
             }).join('');
         }
 
-        // Select de editar
         const select = document.getElementById('editSelect');
         select.innerHTML = '<option value="">-- Elige un script --</option>' + 
             allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')}</option>\`).join('');
@@ -446,7 +467,7 @@ document.getElementById('passInput')?.addEventListener('keypress', e => {
     `);
 });
 
-// ========== API ==========
+// ====================== API ======================
 app.get('/api/scripts', requireAuth, async (req, res) => {
     try {
         const scripts = await ScriptModel.find({}, { code: 0 }).sort({ createdAt: -1 });
@@ -463,6 +484,14 @@ app.post('/api/script', requireAuth, async (req, res) => {
         const protectedCode = obfuscate(code);
         const doc = new ScriptModel({ name: name || 'Sin nombre', code: protectedCode });
         await doc.save();
+
+        // Log a Discord
+        sendDiscordLog(
+            "🔒 Nuevo Script Ofuscado",
+            `**Nombre:** ${doc.name}\n**ID:** \`${doc.id}\``,
+            0x5865F2
+        );
+
         res.json({ id: doc.id });
     } catch {
         res.status(500).json({ error: 'Error interno' });
@@ -480,6 +509,13 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
             { new: true }
         );
         if (!updated) return res.status(404).json({ error: 'No encontrado' });
+
+        sendDiscordLog(
+            "✏️ Script Actualizado",
+            `**Nombre:** ${updated.name}\n**ID:** \`${updated.id}\``,
+            0xFEE75C
+        );
+
         res.json({ success: true });
     } catch {
         res.status(500).json({ error: 'Error interno' });
@@ -489,20 +525,39 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
 app.delete('/api/script/:id', requireAuth, async (req, res) => {
     try {
         await ScriptModel.findOneAndDelete({ id: req.params.id });
+
+        sendDiscordLog(
+            "🗑️ Script Eliminado",
+            `**ID:** \`${req.params.id}\``,
+            0xED4245
+        );
+
         res.json({ success: true });
     } catch {
         res.status(500).json({ error: 'Error' });
     }
 });
 
+// Cuando alguien EJECUTA el script
 app.get('/api/script/:id', async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
+
     if (/chrome|firefox|safari|edg|mozilla|bot|curl|python|axios|postman|wget|discord/i.test(ua) && !ua.includes('roblox')) {
         return res.status(403).send('-- ACCESO DENEGADO');
     }
+
     try {
         const script = await ScriptModel.findOne({ id: req.params.id });
         if (!script) return res.status(404).send('-- No encontrado');
+
+        // === LOG A DISCORD CUANDO LO EJECUTAN ===
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Desconocida';
+        sendDiscordLog(
+            "📜 Script Ejecutado",
+            `**Nombre:** ${script.name || 'Sin nombre'}\n**ID:** \`${script.id}\`\n**IP:** \`${ip}\`\n**User-Agent:** \`${req.headers['user-agent'] || 'N/A'}\``,
+            0x57F287
+        );
+
         res.type('text/plain').send(script.code);
     } catch {
         res.status(500).send('-- Error');
