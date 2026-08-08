@@ -104,135 +104,197 @@ app.get('/', (req, res) => {
 <title>Ikgonavi Hub Pro</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
-body { font-family: 'Plus Jakarta Sans', sans-serif; background: #090a0f; }
-.glass { background: rgba(18,20,32,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.07); }
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
+.glass { background: rgba(17, 19, 28, 0.85); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.06); }
+.sidebar-btn { transition: all 0.2s; }
+.sidebar-btn:hover { background: rgba(99, 102, 241, 0.1); }
+.sidebar-btn.active { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+.bar-fill { transition: width 0.8s ease; }
 </style>
 </head>
-<body class="text-gray-100 min-h-screen">
+<body class="min-h-screen">
 
 <!-- LOGIN -->
 <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
-<div class="glass w-full max-w-md p-8 rounded-2xl">
-<div class="text-center mb-8">
-<div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">⚡</div>
-<h1 class="text-2xl font-bold">Ikgonavi Hub Pro</h1>
-<p class="text-indigo-400 text-sm mt-1">Panel de Control</p>
+<div class="glass w-full max-w-md p-10 rounded-3xl shadow-2xl">
+<div class="text-center mb-10">
+<div class="w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-5 shadow-lg shadow-indigo-500/30">⚡</div>
+<h1 class="text-2xl font-bold tracking-tight">Ikgonavi Hub Pro</h1>
+<p class="text-indigo-400 text-sm mt-2">Panel de Control Avanzado</p>
 </div>
-<input type="password" id="passInput" placeholder="Contraseña del panel" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 mb-4 outline-none focus:border-indigo-500">
-<button onclick="login()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-semibold">Entrar al Panel</button>
-<p id="loginError" class="text-red-400 text-sm text-center mt-4 hidden">Contraseña incorrecta</p>
+<input type="password" id="passInput" placeholder="Contraseña del panel" 
+class="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-2xl px-5 py-4 mb-5 outline-none focus:border-indigo-500 transition">
+<button onclick="login()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
+Entrar al Panel
+</button>
+<p id="loginError" class="text-red-400 text-sm text-center mt-5 hidden">Contraseña incorrecta</p>
 </div>
 </div>
 
 <!-- DASHBOARD -->
 <div id="dashboard" class="hidden min-h-screen">
 <div class="flex">
-<aside class="w-64 glass min-h-screen p-5 flex flex-col fixed left-0 top-0">
-<div class="flex items-center gap-3 mb-10 px-2">
-<div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center font-bold">⚡</div>
+<!-- SIDEBAR -->
+<aside class="w-72 glass min-h-screen p-6 flex flex-col fixed left-0 top-0 border-r border-white/5">
+<div class="flex items-center gap-3 mb-12 px-2">
+<div class="w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">⚡</div>
 <div>
-<div class="font-bold text-sm">Ikgonavi Hub</div>
+<div class="font-bold text-sm tracking-tight">Ikgonavi Hub</div>
 <div class="text-xs text-indigo-400">Pro Panel</div>
 </div>
 </div>
 
-<nav class="flex flex-col gap-1 flex-1">
-<button onclick="showPage('obfuscator')" id="nav-obfuscator" class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium bg-indigo-600/20 text-indigo-300">
-<span>🔒</span> Ofuscador
+<nav class="flex flex-col gap-1.5 flex-1">
+<button onclick="showPage('obfuscator')" id="nav-obfuscator" class="sidebar-btn active flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium">
+<span class="text-lg">🔒</span> Ofuscador
 </button>
-<button onclick="showPage('scripts')" id="nav-scripts" class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-zinc-400 hover:bg-zinc-800">
-<span>📜</span> Scripts
+<button onclick="showPage('scripts')" id="nav-scripts" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
+<span class="text-lg">📜</span> Scripts
 </button>
-<button onclick="showPage('executions')" id="nav-executions" class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-zinc-400 hover:bg-zinc-800">
-<span>📊</span> Ejecuciones
+<button onclick="showPage('executions')" id="nav-executions" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
+<span class="text-lg">📊</span> Ejecuciones
 </button>
-<button onclick="showPage('edit')" id="nav-edit" class="nav-btn flex items-center gap-3 px-4 py-3 rounded-xl text-left text-sm font-medium text-zinc-400 hover:bg-zinc-800">
-<span>✏️</span> Editar Scripts
+<button onclick="showPage('edit')" id="nav-edit" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
+<span class="text-lg">✏️</span> Editar Scripts
 </button>
 </nav>
 
-<button onclick="logout()" class="mt-auto flex items-center gap-3 px-4 py-3 rounded-xl text-sm text-red-400 hover:bg-red-950/40">
-<span>🚪</span> Cerrar Sesión
+<button onclick="logout()" class="mt-auto flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm text-red-400 hover:bg-red-950/30 transition">
+<span class="text-lg">🚪</span> Cerrar Sesión
 </button>
 </aside>
 
-<main class="ml-64 flex-1 p-8">
+<!-- MAIN -->
+<main class="ml-72 flex-1 p-10">
 
 <!-- OFUSCADOR -->
 <div id="page-obfuscator" class="page">
-<h2 class="text-2xl font-bold mb-1">Ofuscador</h2>
-<p class="text-zinc-400 text-sm mb-8">Pega tu código Lua y ofúscalo automáticamente</p>
-<div class="glass rounded-2xl p-6 max-w-3xl">
-<div class="mb-4">
-<label class="text-sm text-zinc-400 mb-1 block">Nombre del Script</label>
-<input id="scriptName" type="text" placeholder="Ej: Silent Aim, ESP..." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500">
+<div class="mb-10">
+<h2 class="text-3xl font-bold tracking-tight">Ofuscador</h2>
+<p class="text-zinc-400 mt-1">Pega tu código Lua y ofúscalo automáticamente con protección Base64</p>
 </div>
-<div class="mb-4">
-<div class="flex justify-between items-center mb-1">
-<label class="text-sm text-zinc-400">Código Lua</label>
-<button onclick="pasteCode()" class="text-xs text-indigo-400">📋 Pegar</button>
+
+<div class="glass rounded-3xl p-8 max-w-3xl">
+<div class="mb-6">
+<label class="text-sm text-zinc-400 mb-2 block font-medium">Nombre del Script</label>
+<input id="scriptName" type="text" placeholder="Ej: Silent Aim, ESP, Kill Aura..." 
+class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 </div>
-<textarea id="scriptCode" placeholder="Pega aquí tu código..." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 h-56 font-mono text-sm outline-none focus:border-indigo-500 resize-none"></textarea>
+
+<div class="mb-6">
+<div class="flex justify-between items-center mb-2">
+<label class="text-sm text-zinc-400 font-medium">Código Lua</label>
+<button onclick="pasteCode()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">📋 Pegar del portapapeles</button>
 </div>
-<button id="saveBtn" onclick="saveScript()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3.5 rounded-xl font-semibold">🔒 Ofuscar y Guardar</button>
-<div class="mt-6">
-<div class="flex justify-between items-center mb-1">
-<label class="text-sm text-zinc-400">Loadstring generado</label>
-<button onclick="copyResult()" class="text-xs text-indigo-400">Copiar</button>
+<textarea id="scriptCode" placeholder="Pega aquí tu código Lua..." 
+class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
-<textarea id="resultOutput" readonly placeholder="Aquí aparecerá el loadstring..." class="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 h-20 font-mono text-xs text-emerald-400 outline-none resize-none"></textarea>
+
+<button id="saveBtn" onclick="saveScript()" 
+class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
+🔒 Ofuscar y Guardar
+</button>
+
+<div class="mt-8">
+<div class="flex justify-between items-center mb-2">
+<label class="text-sm text-zinc-400 font-medium">Loadstring generado</label>
+<button onclick="copyResult()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Copiar</button>
+</div>
+<textarea id="resultOutput" readonly placeholder="El loadstring aparecerá aquí después de ofuscar..." 
+class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-24 font-mono text-xs text-emerald-400 outline-none resize-none"></textarea>
 </div>
 </div>
 </div>
 
 <!-- SCRIPTS -->
 <div id="page-scripts" class="page hidden">
-<div class="flex justify-between items-center mb-8">
+<div class="flex justify-between items-end mb-10">
 <div>
-<h2 class="text-2xl font-bold">Scripts</h2>
-<p class="text-zinc-400 text-sm">Todos tus scripts ofuscados</p>
+<h2 class="text-3xl font-bold tracking-tight">Scripts</h2>
+<p class="text-zinc-400 mt-1">Todos tus scripts ofuscados y listos para usar</p>
 </div>
-<span id="scriptCount" class="bg-indigo-950 text-indigo-300 text-sm px-4 py-1.5 rounded-full border border-indigo-800">0 scripts</span>
+<span id="scriptCount" class="bg-indigo-950/60 text-indigo-300 text-sm px-5 py-2 rounded-full border border-indigo-800/40 font-medium">0 scripts</span>
 </div>
-<div id="scriptsList" class="grid gap-4"><p class="text-zinc-500 text-center py-16">Cargando...</p></div>
+<div id="scriptsList" class="grid gap-5"><p class="text-zinc-500 text-center py-20">Cargando scripts...</p></div>
 </div>
 
-<!-- EJECUCIONES (NUEVA SECCIÓN) -->
+<!-- EJECUCIONES -->
 <div id="page-executions" class="page hidden">
-<div class="flex justify-between items-center mb-8">
+<div class="flex justify-between items-end mb-10">
 <div>
-<h2 class="text-2xl font-bold">📊 Ejecuciones</h2>
-<p class="text-zinc-400 text-sm">Cuántas veces se ha ejecutado cada script</p>
+<h2 class="text-3xl font-bold tracking-tight">📊 Ejecuciones</h2>
+<p class="text-zinc-400 mt-1">Estadísticas de uso de tus scripts</p>
 </div>
-<button onclick="loadScripts()" class="text-sm bg-zinc-800 hover:bg-zinc-700 px-4 py-2 rounded-xl">🔄 Actualizar</button>
+<button onclick="loadScripts()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
 </div>
 
-<div id="executionsList" class="grid gap-4">
-<p class="text-zinc-500 text-center py-16">Cargando ejecuciones...</p>
+<!-- Stats Cards -->
+<div id="statsCards" class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+<div class="glass rounded-2xl p-6">
+<div class="text-zinc-400 text-sm font-medium mb-1">Total de Scripts</div>
+<div id="statTotal" class="text-3xl font-bold text-white">0</div>
+</div>
+<div class="glass rounded-2xl p-6">
+<div class="text-zinc-400 text-sm font-medium mb-1">Ejecuciones Totales</div>
+<div id="statExecutions" class="text-3xl font-bold text-emerald-400">0</div>
+</div>
+<div class="glass rounded-2xl p-6">
+<div class="text-zinc-400 text-sm font-medium mb-1">Más Popular</div>
+<div id="statTop" class="text-xl font-bold text-indigo-300 truncate">—</div>
+</div>
+</div>
+
+<!-- Tabla de Ejecuciones -->
+<div class="glass rounded-3xl overflow-hidden">
+<div class="px-6 py-5 border-b border-white/5">
+<h3 class="font-semibold text-lg">Ranking de Scripts</h3>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full">
+<thead>
+<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">#</th>
+<th class="px-6 py-4 font-medium">Script</th>
+<th class="px-6 py-4 font-medium">Ejecuciones</th>
+<th class="px-6 py-4 font-medium w-1/3">Progreso</th>
+</tr>
+</thead>
+<tbody id="executionsTable">
+<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando datos...</td></tr>
+</tbody>
+</table>
+</div>
 </div>
 </div>
 
 <!-- EDITAR -->
 <div id="page-edit" class="page hidden">
-<h2 class="text-2xl font-bold mb-1">Editar Scripts</h2>
-<p class="text-zinc-400 text-sm mb-8">Selecciona un script para reemplazar su código</p>
-<div class="glass rounded-2xl p-6 max-w-3xl">
-<div class="mb-4">
-<label class="text-sm text-zinc-400 mb-1 block">Seleccionar Script</label>
-<select id="editSelect" onchange="loadEditScript()" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500">
+<div class="mb-10">
+<h2 class="text-3xl font-bold tracking-tight">Editar Scripts</h2>
+<p class="text-zinc-400 mt-1">Reemplaza el código de un script existente</p>
+</div>
+
+<div class="glass rounded-3xl p-8 max-w-3xl">
+<div class="mb-6">
+<label class="text-sm text-zinc-400 mb-2 block font-medium">Seleccionar Script</label>
+<select id="editSelect" onchange="loadEditScript()" 
+class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 <option value="">-- Elige un script --</option>
 </select>
 </div>
-<div class="mb-4">
-<label class="text-sm text-zinc-400 mb-1 block">Nuevo Nombre</label>
-<input id="editName" type="text" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 outline-none focus:border-indigo-500">
+<div class="mb-6">
+<label class="text-sm text-zinc-400 mb-2 block font-medium">Nuevo Nombre</label>
+<input id="editName" type="text" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 </div>
-<div class="mb-4">
-<label class="text-sm text-zinc-400 mb-1 block">Nuevo Código Lua</label>
-<textarea id="editCode" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 h-56 font-mono text-sm outline-none focus:border-indigo-500 resize-none"></textarea>
+<div class="mb-6">
+<label class="text-sm text-zinc-400 mb-2 block font-medium">Nuevo Código Lua</label>
+<textarea id="editCode" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
-<button id="editBtn" onclick="updateScript()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3.5 rounded-xl font-semibold">💾 Guardar Cambios</button>
+<button id="editBtn" onclick="updateScript()" 
+class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
+💾 Guardar Cambios
+</button>
 </div>
 </div>
 
@@ -276,13 +338,13 @@ function showPage(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
     document.getElementById('page-' + page).classList.remove('hidden');
 
-    document.querySelectorAll('.nav-btn').forEach(b => {
-        b.classList.remove('bg-indigo-600/20', 'text-indigo-300');
+    document.querySelectorAll('.sidebar-btn').forEach(b => {
+        b.classList.remove('active');
         b.classList.add('text-zinc-400');
     });
     const active = document.getElementById('nav-' + page);
     if (active) {
-        active.classList.add('bg-indigo-600/20', 'text-indigo-300');
+        active.classList.add('active');
         active.classList.remove('text-zinc-400');
     }
 
@@ -297,58 +359,75 @@ async function loadScripts() {
 
         document.getElementById('scriptCount').innerText = allScripts.length + ' scripts';
 
-        // Lista de Scripts
+        // === SCRIPTS LIST ===
         const list = document.getElementById('scriptsList');
         if (allScripts.length === 0) {
-            list.innerHTML = '<p class="text-zinc-500 text-center py-16">No hay scripts todavía</p>';
+            list.innerHTML = '<p class="text-zinc-500 text-center py-20">No hay scripts todavía</p>';
         } else {
             list.innerHTML = allScripts.map(s => {
                 const ls = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${s.id}"))()\`;
                 return \`
-                <div class="glass rounded-xl p-5">
-                    <div class="flex justify-between items-start mb-3">
+                <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
+                    <div class="flex justify-between items-start mb-4">
                         <div>
-                            <div class="font-semibold text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
-                            <div class="text-xs text-zinc-500 mt-1">ID: \${s.id} • Ejecuciones: \${s.executions || 0}</div>
+                            <div class="font-semibold text-lg text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
+                            <div class="text-xs text-zinc-500 mt-1.5">ID: \${s.id} • <span class="text-emerald-400">\${s.executions || 0} ejecuciones</span></div>
                         </div>
-                        <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 px-3 py-1 rounded-lg bg-red-950/40">Borrar</button>
+                        <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-950/60 transition">Borrar</button>
                     </div>
-                    <textarea readonly class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
-                    <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-3 w-full bg-indigo-600 hover:bg-indigo-500 py-2 rounded-lg text-sm">Copiar Loadstring</button>
+                    <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
+                    <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" 
+                    class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">
+                        Copiar Loadstring
+                    </button>
                 </div>\`;
             }).join('');
         }
 
-        // Lista de Ejecuciones
-        const execList = document.getElementById('executionsList');
+        // === EJECUCIONES ===
+        const totalExec = allScripts.reduce((sum, s) => sum + (s.executions || 0), 0);
+        const maxExec = Math.max(...allScripts.map(s => s.executions || 0), 1);
+        const topScript = allScripts.length ? [...allScripts].sort((a,b) => (b.executions||0)-(a.executions||0))[0] : null;
+
+        document.getElementById('statTotal').innerText = allScripts.length;
+        document.getElementById('statExecutions').innerText = totalExec.toLocaleString();
+        document.getElementById('statTop').innerText = topScript ? (topScript.name || 'Sin nombre') : '—';
+
+        const tbody = document.getElementById('executionsTable');
         if (allScripts.length === 0) {
-            execList.innerHTML = '<p class="text-zinc-500 text-center py-16">No hay scripts todavía</p>';
+            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts todavía</td></tr>';
         } else {
-            // Ordenar por más ejecutados
             const sorted = [...allScripts].sort((a, b) => (b.executions || 0) - (a.executions || 0));
-            execList.innerHTML = sorted.map(s => {
+            tbody.innerHTML = sorted.map((s, i) => {
                 const count = s.executions || 0;
+                const percent = Math.round((count / maxExec) * 100);
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
                 return \`
-                <div class="glass rounded-xl p-5 flex items-center justify-between">
-                    <div>
-                        <div class="font-semibold text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
-                        <div class="text-xs text-zinc-500 mt-1">ID: \${s.id}</div>
-                    </div>
-                    <div class="text-right">
-                        <div class="text-2xl font-bold text-emerald-400">\${count}</div>
-                        <div class="text-xs text-zinc-500">ejecuciones</div>
-                    </div>
-                </div>\`;
+                <tr class="border-t border-white/5 hover:bg-white/[0.02] transition">
+                    <td class="px-6 py-5 text-lg">\${medal}</td>
+                    <td class="px-6 py-5">
+                        <div class="font-medium text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
+                        <div class="text-xs text-zinc-500 mt-0.5">\${s.id.slice(0,12)}...</div>
+                    </td>
+                    <td class="px-6 py-5">
+                        <span class="text-xl font-bold text-emerald-400">\${count}</span>
+                    </td>
+                    <td class="px-6 py-5">
+                        <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
+                            <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width: \${percent}%"></div>
+                        </div>
+                        <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
+                    </td>
+                </tr>\`;
             }).join('');
         }
 
-        // Select de editar
+        // Select editar
         const select = document.getElementById('editSelect');
         select.innerHTML = '<option value="">-- Elige un script --</option>' + 
-            allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')}</option>\`).join('');
+            allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')} (\${s.executions||0} exec)</option>\`).join('');
     } catch {
-        document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-16">Error al cargar</p>';
-        document.getElementById('executionsList').innerHTML = '<p class="text-red-400 text-center py-16">Error al cargar</p>';
+        document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-20">Error al cargar</p>';
     }
 }
 
@@ -369,9 +448,9 @@ async function pasteCode() {
 
 function copyResult() {
     const val = document.getElementById('resultOutput').value;
-    if (!val) return alert('No hay loadstring');
+    if (!val) return alert('No hay loadstring generado');
     navigator.clipboard.writeText(val);
-    alert('¡Copiado!');
+    alert('¡Loadstring copiado!');
 }
 
 async function saveScript() {
@@ -396,11 +475,11 @@ async function saveScript() {
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
-            btn.classList.add('bg-emerald-600');
+            btn.classList.add('from-emerald-600', 'to-emerald-500');
             setTimeout(() => {
                 btn.innerText = '🔒 Ofuscar y Guardar';
                 btn.disabled = false;
-                btn.classList.remove('bg-emerald-600');
+                btn.classList.remove('from-emerald-600', 'to-emerald-500');
             }, 1800);
             loadScripts();
         } else {
@@ -463,7 +542,7 @@ async function updateScript() {
 }
 
 async function deleteScript(id) {
-    if (!confirm('¿Borrar este script?')) return;
+    if (!confirm('¿Borrar este script permanentemente?')) return;
     await fetch('/api/script/' + id, {
         method: 'DELETE',
         headers: { 'x-panel-password': panelPass }
@@ -532,7 +611,6 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Cuando alguien EJECUTA el script → suma +1 y manda log
 app.get('/api/script/:id', async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
 
