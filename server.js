@@ -17,7 +17,16 @@ const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 40 });
 app.use('/api/', limiter);
 
 mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3VZH9aXK77wX@ikgmxer.8tj7kfa.mongodb.net/hubsilent?appName=ikgmxer")
-    .then(() => console.log("🔥 Ikgonavi Hub Pro activo"))
+    .then(async () => {
+        console.log("🔥 Ikgonavi Hub Pro activo");
+        try {
+            // Elimina el índice conflictivo 'slug_1' si existe en la colección
+            await mongoose.connection.collection('hubscripts').dropIndex('slug_1');
+            console.log("🧹 Índice obsoleto 'slug_1' eliminado correctamente");
+        } catch (e) {
+            // Si el índice ya no existe, continúa sin problemas
+        }
+    })
     .catch(err => console.error("Error DB:", err));
 
 const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
@@ -66,7 +75,6 @@ function requireAuth(req, res, next) {
     next();
 }
 
-// Interfaz HTML incrustada de forma segura para evitar errores de rutas
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="es">
