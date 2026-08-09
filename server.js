@@ -9,7 +9,8 @@ app.set('trust proxy', 1);
 
 // ====================== CONFIGURACIÓN ======================
 const PANEL_PASSWORD = "CambiaEstaContraseña123!"; // ← CAMBIA ESTA
-const DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1535376671744598056/-2alJ6mcPK8LteyAq-75vL1StGuh3wEGlnwSl2jNfUDbVVNe4an8oHD2rZW9N-390KgS";
+// La webhook se protege mediante variable de entorno (o usa la tuya por defecto si no está definida)
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1536109822188191746/n-sh2GrGqp1zCTVBoYPzVacaRaCoAsXPyvj4zhVorTGbloeqwu5dSIOuK9SQhf4wCIiv";
 const PORT = process.env.PORT || 3000;
 
 // ====================== SEGURIDAD ======================
@@ -102,7 +103,150 @@ function requireAuth(req, res, next) {
     next();
 }
 
-// ====================== PANEL ======================
+// ====================== RUTAS API ======================
+
+app.get('/api/scripts', requireAuth, async (req, res) => {
+    try {
+        const scripts = await ScriptModel.find({}, { rawCode: 0 });
+        res.json(scripts);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener scripts' });
+    }
+});
+
+app.post('/api/script', requireAuth, async (req, res) => {
+    try {
+        const { name, code } = req.body;
+        if (!code) return res.status(400).json({ error: 'Falta el código' });
+
+        const obfuscated = obfuscate(code);
+        const newScript = new ScriptModel({
+            name: name || 'Sin nombre',
+            code: obfuscated,
+            rawCode: code
+        });
+
+        await newScript.save();
+        sendDiscordLog("📜 Script Creado", `Se ha creado y ofuscado el script: **${name || 'Sin nombre'}**`, 0x10B981);
+        res.json({ id: newScript.id });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al guardar script' });
+    }
+});
+
+app.get('/api/script/:id/raw', requireAuth, async (req, res) => {
+    try {
+        const script = await ScriptModel.findOne({ id: req.params.id });
+        if (!script) return res.status(404).json({ error: 'No encontrado' });
+        res.json(script);
+    } catch (err) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+// ACTUALIZAR SCRIPT (Manda el mensaje a Discord)
+app.put('/api/script/:id', requireAuth, async (req, res) => {
+    try {
+        const { name, code } = req.body;
+        if (!code) return res.status(400).json({ error: 'Falta el código' });
+
+        const obfuscated = obfuscate(code);
+        const script = await ScriptModel.findOneAndUpdate(
+            { id: req.params.id },
+            { name: name || 'Sin nombre', code: obfuscated, rawCode: code },
+            { new: true }
+        );
+
+        if (!script) return res.status(404).json({ error: 'No encontrado' });
+
+        // 🔔 AVISO DE SCRIPT ACTUALIZADO A DISCORD
+        await sendDiscordLog("🔄 Script actualizado !", `El script **${script.name}** (\`${script.id}\`) ha sido modificado y re-ofuscado correctamente.`, 0xF59E0B);
+
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al actualizar' });
+    }
+});
+
+app.delete('/api/script/:id', requireAuth, async (req, res) => {
+    try {
+        const script = await ScriptModel.findOneAndDelete({ id: req.params.id });
+        if (script) {
+            sendDiscordLog("🗑️ Script Borrado", `Se eliminó el script: **${script.name}**`, 0xEF4444);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error al borrar' });
+    }
+});
+
+app.get('/api/script/:id', async (req, res) => {
+    try {
+        const script = await ScriptModel.findOne({ id: req.params.id });
+        if (!script) return res.status(404).send('-- Script no encontrado');
+
+        script.executions += 1;
+        await script.save();
+
+        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+        const userAgent = req.headers['user-agent'] || 'Desconocido';
+
+        await ExecutionModel.create({
+            scriptId: script.id,
+            scriptName: script.name,
+            ip,
+            userAgent
+        });
+
+        res.send(script.code);
+    } catch (err) {
+        res.status(500).send('-- Error interno');
+    }
+});
+
+app.get('/api/executions', requireAuth, async (req, res) => {
+    try {
+        const logs = await ExecutionModel.find().sort({ createdAt: -1 }).limit(100);
+        res.json(logs);
+    } catch (err) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+app.delete('/api/executions', requireAuth, async (req, res) => {
+    try {
+        await ExecutionModel.deleteMany({});
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+app.get('/api/executor-stats', requireAuth, async (req, res) => {
+    try {
+        const logs = await ExecutionModel.find();
+        const counts = {};
+        logs.forEach(l => {
+            const ua = l.userAgent || 'Desconocido';
+            counts[ua] = (counts[ua] || 0) + 1;
+        });
+        const stats = Object.keys(counts).map(ua => ({
+            name: ua.split('/')[0] || 'Desconocido',
+            version: ua.includes('/') ? ua.split('/')[1] || 'v1.0' : 'N/A',
+            count: counts[ua]
+        })).sort((a, b) => b.count - a.count);
+        res.json(stats);
+    } catch (err) {
+        res.status(500).json({ error: 'Error' });
+    }
+});
+
+app.post('/api/test-webhook', requireAuth, async (req, res) => {
+    await sendDiscordLog("🔔 Prueba de Webhook", "¡El sistema de notificaciones de Ikgonavi Hub Pro funciona correctamente!", 0x3B82F6);
+    res.json({ success: true });
+});
+
+// ====================== PANEL HTML ======================
 app.get('/', (req, res) => {
     res.send(`
 <!DOCTYPE html>
@@ -450,18 +594,18 @@ function renderScriptsList(scripts) {
     }
     list.innerHTML = scripts.map(s => {
         const ls = 'loadstring(game:HttpGet("' + location.origin + '/api/script/' + s.id + '"))()';
-        return \`
+        return `
         <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
             <div class="flex justify-between items-start mb-4">
                 <div>
-                    <div class="font-semibold text-lg text-indigo-300\">\${escapeHtml(s.name || 'Sin nombre')}</div>
+                    <div class="font-semibold text-lg text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
                     <div class="text-xs text-zinc-500 mt-1.5">ID: \${s.id} • <span class="text-emerald-400">\${s.executions || 0} ejecuciones</span></div>
                 </div>
                 <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
             </div>
             <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
             <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
-        </div>\`;
+        </div>`;
     }).join('');
 }
 
@@ -490,7 +634,7 @@ function updateStatsAndRanking() {
         const count = s.executions || 0;
         const percent = Math.round((count / maxExec) * 100);
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-        return \`
+        return `
         <tr class="border-t border-white/5 hover:bg-white/[0.02]">
             <td class="px-6 py-5 text-lg">\${medal}</td>
             <td class="px-6 py-5">
@@ -504,7 +648,7 @@ function updateStatsAndRanking() {
                 </div>
                 <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
             </td>
-        </tr>\`;
+        </tr>`;
     }).join('');
 }
 
@@ -525,7 +669,7 @@ async function loadExecutorStats() {
         tbody.innerHTML = stats.map((s, i) => {
             const percent = Math.round((s.count / maxCount) * 100);
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-            return \`
+            return `
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
                 <td class="px-6 py-5 text-lg">\${medal}</td>
                 <td class="px-6 py-5 font-semibold text-indigo-300">\${escapeHtml(s.name)}</td>
@@ -537,7 +681,7 @@ async function loadExecutorStats() {
                     </div>
                     <div class="text-xs text-zinc-500 mt-1">\${percent}%</div>
                 </td>
-            </tr>\`;
+            </tr>`;
         }).join('');
     } catch {
         document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar estadísticas</td></tr>';
@@ -563,7 +707,7 @@ async function loadLogs() {
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             const ua = (log.userAgent || 'Desconocido').slice(0, 70);
-            return \`
+            return `
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
                 <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">\${date}</td>
                 <td class="px-6 py-4">
@@ -572,7 +716,7 @@ async function loadLogs() {
                 </td>
                 <td class="px-6 py-4 font-mono text-sm text-emerald-400">\${log.ip || '???'}</td>
                 <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="\${escapeHtml(log.userAgent || '')}">\${escapeHtml(ua)}</td>
-            </tr>\`;
+            </tr>`;
         }).join('');
     } catch {
         document.getElementById('logsTable').innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
@@ -642,7 +786,7 @@ async function saveScript() {
         const data = await res.json();
 
         if (data.id) {
-            document.getElementById('resultOutput').value = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()\`;
+            document.getElementById('resultOutput').value = `loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()`;
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
@@ -727,188 +871,12 @@ async function deleteScript(id) {
     });
     loadScripts();
 }
-
-document.getElementById('passInput')?.addEventListener('keypress', e => {
-    if (e.key === 'Enter') login();
-});
 </script>
 </body>
 </html>
-`);
+    `);
 });
 
-// ====================== API ENDPOINTS ======================
-app.get('/api/scripts', requireAuth, async (req, res) => {
-    try {
-        const scripts = await ScriptModel.find({}, { code: 0, rawCode: 0 }).sort({ createdAt: -1 });
-        res.json(scripts);
-    } catch {
-        res.json([]);
-    }
+app.listen(PORT, () => {
+    console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });
-
-app.get('/api/script/:id/raw', requireAuth, async (req, res) => {
-    try {
-        const script = await ScriptModel.findOne({ id: req.params.id }, { code: 0 });
-        if (!script) return res.status(404).json({ error: 'No encontrado' });
-        res.json(script);
-    } catch {
-        res.status(500).json({ error: 'Error' });
-    }
-});
-
-app.get('/api/executions', requireAuth, async (req, res) => {
-    try {
-        const logs = await ExecutionModel.find().sort({ createdAt: -1 }).limit(200);
-        res.json(logs);
-    } catch {
-        res.json([]);
-    }
-});
-
-app.delete('/api/executions', requireAuth, async (req, res) => {
-    try {
-        await ExecutionModel.deleteMany({});
-        res.json({ success: true });
-    } catch {
-        res.status(500).json({ error: 'Error' });
-    }
-});
-
-app.get('/api/executor-stats', requireAuth, async (req, res) => {
-    try {
-        const logs = await ExecutionModel.find().lean();
-        const stats = {};
-
-        logs.forEach(log => {
-            const ua = (log.userAgent || 'Desconocido').toLowerCase();
-            let name = 'Desconocido / Navegador';
-            let version = 'N/A';
-
-            if (ua.includes('solara')) { name = 'Solara'; }
-            else if (ua.includes('wave')) { name = 'Wave'; }
-            else if (ua.includes('delta')) { name = 'Delta'; }
-            else if (ua.includes('fluxus')) { name = 'Fluxus'; }
-            else if (ua.includes('hydrogen')) { name = 'Hydrogen'; }
-            else if (ua.includes('krnl')) { name = 'Krnl'; }
-            else if (ua.includes('synapse') || ua.includes('syn')) { name = 'Synapse / Synapse Z'; }
-            else if (ua.includes('electron')) { name = 'Electron'; }
-            else if (ua.includes('codex')) { name = 'Codex'; }
-            else if (ua.includes('arceus')) { name = 'Arceus X'; }
-            else if (ua.includes('macsploit')) { name = 'MacSploit'; }
-            else if (/chrome|firefox|safari|edg|opera|brave/i.test(ua)) { name = 'Navegador Web'; }
-
-            const matchVersion = ua.match(/(?:v|version|ver|\/)\s*(\d+\.\d+(?:\.\d+)?)/i);
-            if (matchVersion && matchVersion[1]) {
-                version = matchVersion[1];
-            }
-
-            const key = `${name}_${version}`;
-            if (!stats[key]) {
-                stats[key] = { name, version, count: 0 };
-            }
-            stats[key].count++;
-        });
-
-        const result = Object.values(stats).sort((a, b) => b.count - a.count);
-        res.json(result);
-    } catch {
-        res.json([]);
-    }
-});
-
-app.post('/api/test-webhook', requireAuth, async (req, res) => {
-    await sendDiscordLog("🔔 Prueba de Webhook", "¡La conexión con el panel de **Ikgonavi Hub Pro** funciona correctamente!", 0x3498DB);
-    res.json({ success: true });
-});
-
-app.post('/api/script', requireAuth, async (req, res) => {
-    try {
-        const { name, code } = req.body;
-        if (!code) return res.status(400).json({ error: 'Falta el código' });
-        const protectedCode = obfuscate(code);
-        const doc = new ScriptModel({ 
-            name: name || 'Sin nombre', 
-            code: protectedCode,
-            rawCode: code 
-        });
-        await doc.save();
-        sendDiscordLog("🔒 Nuevo Script Ofuscado", `**Nombre:** ${doc.name}\n**ID:** \`${doc.id}\``, 0x5865F2);
-        res.json({ id: doc.id });
-    } catch {
-        res.status(500).json({ error: 'Error interno' });
-    }
-});
-
-app.put('/api/script/:id', requireAuth, async (req, res) => {
-    try {
-        const { name, code } = req.body;
-        if (!code) return res.status(400).json({ error: 'Falta el código' });
-        const protectedCode = obfuscate(code);
-        const updated = await ScriptModel.findOneAndUpdate(
-            { id: req.params.id },
-            { 
-                name: name || 'Sin nombre', 
-                code: protectedCode,
-                rawCode: code 
-            },
-            { new: true }
-        );
-        if (!updated) return res.status(404).json({ error: 'No encontrado' });
-        sendDiscordLog("✏️ Script Actualizado", `**Nombre:** ${updated.name}\n**ID:** \`${updated.id}\``, 0xFEE75C);
-        res.json({ success: true });
-    } catch {
-        res.status(500).json({ error: 'Error interno' });
-    }
-});
-
-app.delete('/api/script/:id', requireAuth, async (req, res) => {
-    try {
-        await ScriptModel.findOneAndDelete({ id: req.params.id });
-        sendDiscordLog("🗑️ Script Eliminado", `**ID:** \`${req.params.id}\``, 0xED4245);
-        res.json({ success: true });
-    } catch {
-        res.status(500).json({ error: 'Error' });
-    }
-});
-
-app.get('/api/script/:id', async (req, res) => {
-    const ua = (req.headers['user-agent'] || '').toLowerCase();
-
-    if (/chrome|firefox|safari|edg|opera|brave/i.test(ua) && !/roblox|synapse|script-ware|krnl|fluxus|solara|wave|electron|delta/i.test(ua)) {
-        return res.status(403).send('-- ACCESO DENEGADO');
-    }
-
-    try {
-        const script = await ScriptModel.findOneAndUpdate(
-            { id: req.params.id },
-            { $inc: { executions: 1 } },
-            { new: true }
-        );
-
-        if (!script) return res.status(404).send('-- No encontrado');
-
-        const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Desconocida').toString().split(',')[0].trim();
-        const userAgent = req.headers['user-agent'] || 'Desconocido';
-
-        await ExecutionModel.create({
-            scriptId: script.id,
-            scriptName: script.name || 'Sin nombre',
-            ip,
-            userAgent
-        });
-
-        sendDiscordLog(
-            "📜 Script Ejecutado",
-            `**Nombre:** ${script.name || 'Sin nombre'}\n**ID:** \`${script.id}\`\n**Ejecuciones:** ${script.executions}\n**IP:** \`${ip}\`\n**UA:** \`${userAgent.slice(0, 80)}\``,
-            0x57F287
-        );
-
-        res.type('text/plain').send(script.code);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('-- Error');
-    }
-});
-
-app.listen(PORT, () => console.log("🛡️ Ikgonavi Hub Pro corriendo en puerto", PORT));
