@@ -8,8 +8,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ====================== CONFIGURACIÓN ======================
-const PANEL_PASSWORD = "CambiaЭтаContraseña123!"; // ← CAMBIA ESTA
-// La webhook se protege mediante variable de entorno (o usa la tuya por defecto si no está definida)
+const PANEL_PASSWORD = "CambiaЭтаContraseña123!";
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1536109822188191746/n-sh2GrGqp1zCTVBoYPzVacaRaCoAsXPyvj4zhVorTGbloeqwu5dSIOuK9SQhf4wCIiv";
 const PORT = process.env.PORT || 3000;
 
