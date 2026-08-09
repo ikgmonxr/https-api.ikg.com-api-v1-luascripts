@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '2mb' }));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100 });
 app.use('/api/', limiter);
 
 // ====================== BASE DE DATOS ======================
@@ -27,12 +27,12 @@ mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3V
 const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
     id: { type: String, default: () => crypto.randomBytes(16).toString('hex') },
     name: String,
-    code: String,
+    code: String,       // Código ofuscado servido a Roblox
+    rawCode: String,    // Código original para poder editarlo
     executions: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now }
 }));
 
-// Nuevo: historial de quién ejecuta
 const ExecutionModel = mongoose.model('HubExecution', new mongoose.Schema({
     scriptId: String,
     scriptName: String,
@@ -160,6 +160,9 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <button onclick="showPage('executions')" id="nav-executions" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
 <span class="text-lg">📊</span> Ejecuciones
 </button>
+<button onclick="showPage('executors')" id="nav-executors" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
+<span class="text-lg">🤖</span> Execs Ranking
+</button>
 <button onclick="showPage('logs')" id="nav-logs" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
 <span class="text-lg">👁️</span> Quién Ejecuta
 </button>
@@ -168,9 +171,14 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </button>
 </nav>
 
-<button onclick="logout()" class="mt-auto flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm text-red-400 hover:bg-red-950/30 transition">
-<span class="text-lg">🚪</span> Cerrar Sesión
+<div class="pt-4 border-t border-white/5 mt-auto flex flex-col gap-2">
+<button onclick="testWebhook()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-indigo-300 bg-indigo-950/30 hover:bg-indigo-900/40 transition">
+<span>🔔</span> Test Webhook Discord
 </button>
+<button onclick="logout()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-red-400 hover:bg-red-950/30 transition">
+<span>🚪</span> Cerrar Sesión
+</button>
+</div>
 </aside>
 
 <main class="ml-72 flex-1 p-10">
@@ -211,16 +219,19 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <h2 class="text-3xl font-bold tracking-tight">Scripts</h2>
 <p class="text-zinc-400 mt-1">Todos tus scripts ofuscados</p>
 </div>
+<div class="flex gap-4 items-center">
+<input type="text" id="scriptSearch" oninput="filterScripts()" placeholder="🔍 Buscar script..." class="bg-zinc-900/60 border border-zinc-700/40 rounded-xl px-4 py-2 text-sm outline-none focus:border-indigo-500 transition">
 <span id="scriptCount" class="bg-indigo-950/60 text-indigo-300 text-sm px-5 py-2 rounded-full border border-indigo-800/40 font-medium">0 scripts</span>
+</div>
 </div>
 <div id="scriptsList" class="grid gap-5"><p class="text-zinc-500 text-center py-20">Cargando...</p></div>
 </div>
 
-<!-- EJECUCIONES (RANKING) -->
+<!-- EJECUCIONES (RANKING DE SCRIPTS) -->
 <div id="page-executions" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
-<h2 class="text-3xl font-bold tracking-tight">📊 Ejecuciones</h2>
+<h2 class="text-3xl font-bold tracking-tight">📊 Ejecuciones de Scripts</h2>
 <p class="text-zinc-400 mt-1">Estadísticas y ranking de tus scripts</p>
 </div>
 <button onclick="loadScripts()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
@@ -263,12 +274,46 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 </div>
 
-<!-- QUIÉN EJECUTA (NUEVA SECCIÓN) -->
+<!-- EXECUTORS RANKINGS (NUEVA SECCIÓN) -->
+<div id="page-executors" class="page hidden">
+<div class="flex justify-between items-end mb-10">
+<div>
+<h2 class="text-3xl font-bold tracking-tight">🤖 Ejecutores más Usados</h2>
+<p class="text-zinc-400 mt-1">Ranking y versiones de los ejecutores de Roblox detectados</p>
+</div>
+<button onclick="loadExecutorStats()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
+</div>
+
+<div class="glass rounded-3xl overflow-hidden">
+<div class="px-6 py-5 border-b border-white/5 flex justify-between items-center">
+<h3 class="font-semibold text-lg">Ranking de Execs & Versiones</h3>
+<span id="execsCount" class="text-sm text-zinc-400">0 ejecutores únicos</span>
+</div>
+<div class="overflow-x-auto">
+<table class="w-full">
+<thead>
+<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">#</th>
+<th class="px-6 py-4 font-medium">Ejecutor</th>
+<th class="px-6 py-4 font-medium">Versión Detectada</th>
+<th class="px-6 py-4 font-medium">Total Usos</th>
+<th class="px-6 py-4 font-medium w-1/4">Popularidad</th>
+</tr>
+</thead>
+<tbody id="executorsTable">
+<tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">Cargando estadísticas...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- QUIÉN EJECUTA -->
 <div id="page-logs" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
 <h2 class="text-3xl font-bold tracking-tight">👁️ Quién Ejecuta</h2>
-<p class="text-zinc-400 mt-1">Historial de las personas que usan tus scripts</p>
+<p class="text-zinc-400 mt-1">Historial detallado de las personas que usan tus scripts</p>
 </div>
 <div class="flex gap-3">
 <button onclick="loadLogs()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
@@ -303,7 +348,7 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <div id="page-edit" class="page hidden">
 <div class="mb-10">
 <h2 class="text-3xl font-bold tracking-tight">Editar Scripts</h2>
-<p class="text-zinc-400 mt-1">Reemplaza el código de un script existente</p>
+<p class="text-zinc-400 mt-1">Selecciona un script para ver su código actual y reemplazarlo</p>
 </div>
 <div class="glass rounded-3xl p-8 max-w-3xl">
 <div class="mb-6">
@@ -317,10 +362,10 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <input id="editName" type="text" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 </div>
 <div class="mb-6">
-<label class="text-sm text-zinc-400 mb-2 block font-medium">Nuevo Código Lua</label>
-<textarea id="editCode" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
+<label class="text-sm text-zinc-400 mb-2 block font-medium">Código Lua Actual / Nuevo</label>
+<textarea id="editCode" placeholder="Selecciona un script arriba para cargar su código..." class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
-<button id="editBtn" onclick="updateScript()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">💾 Guardar Cambios</button>
+<button id="editBtn" onclick="updateScript()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">💾 Guardar y Re-ofuscar</button>
 </div>
 </div>
 
@@ -376,6 +421,7 @@ function showPage(page) {
 
     if (page === 'scripts' || page === 'edit' || page === 'executions') loadScripts();
     if (page === 'logs') loadLogs();
+    if (page === 'executors') loadExecutorStats();
 }
 
 async function loadScripts() {
@@ -384,72 +430,117 @@ async function loadScripts() {
         if (res.status === 401) return logout();
         allScripts = await res.json();
 
-        document.getElementById('scriptCount').innerText = allScripts.length + ' scripts';
+        renderScriptsList(allScripts);
+        updateStatsAndRanking();
 
-        // Scripts list
-        const list = document.getElementById('scriptsList');
-        if (allScripts.length === 0) {
-            list.innerHTML = '<p class="text-zinc-500 text-center py-20">No hay scripts todavía</p>';
-        } else {
-            list.innerHTML = allScripts.map(s => {
-                const ls = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${s.id}"))()\`;
-                return \`
-                <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
-                    <div class="flex justify-between items-start mb-4">
-                        <div>
-                            <div class="font-semibold text-lg text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
-                            <div class="text-xs text-zinc-500 mt-1.5">ID: \${s.id} • <span class="text-emerald-400">\${s.executions || 0} ejecuciones</span></div>
-                        </div>
-                        <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
-                    </div>
-                    <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
-                    <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
-                </div>\`;
-            }).join('');
-        }
-
-        // Stats + Ranking
-        const totalExec = allScripts.reduce((sum, s) => sum + (s.executions || 0), 0);
-        const maxExec = Math.max(...allScripts.map(s => s.executions || 0), 1);
-        const topScript = allScripts.length ? [...allScripts].sort((a,b) => (b.executions||0)-(a.executions||0))[0] : null;
-
-        document.getElementById('statTotal').innerText = allScripts.length;
-        document.getElementById('statExecutions').innerText = totalExec.toLocaleString();
-        document.getElementById('statTop').innerText = topScript ? (topScript.name || 'Sin nombre') : '—';
-
-        const tbody = document.getElementById('executionsTable');
-        if (allScripts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts</td></tr>';
-        } else {
-            const sorted = [...allScripts].sort((a, b) => (b.executions || 0) - (a.executions || 0));
-            tbody.innerHTML = sorted.map((s, i) => {
-                const count = s.executions || 0;
-                const percent = Math.round((count / maxExec) * 100);
-                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-                return \`
-                <tr class="border-t border-white/5 hover:bg-white/[0.02]">
-                    <td class="px-6 py-5 text-lg">\${medal}</td>
-                    <td class="px-6 py-5">
-                        <div class="font-medium text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
-                        <div class="text-xs text-zinc-500 mt-0.5">\${s.id.slice(0,14)}...</div>
-                    </td>
-                    <td class="px-6 py-5"><span class="text-xl font-bold text-emerald-400">\${count}</span></td>
-                    <td class="px-6 py-5">
-                        <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
-                            <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width:\${percent}%"></div>
-                        </div>
-                        <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
-                    </td>
-                </tr>\`;
-            }).join('');
-        }
-
-        // Select editar
         const select = document.getElementById('editSelect');
         select.innerHTML = '<option value="">-- Elige un script --</option>' + 
-            allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')} (\${s.executions||0})</option>\`).join('');
+            allScripts.map(s => `<option value="${s.id}">${escapeHtml(s.name || 'Sin nombre')} (${s.executions||0})</option>`).join('');
     } catch {
         document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-20">Error al cargar</p>';
+    }
+}
+
+function renderScriptsList(scripts) {
+    document.getElementById('scriptCount').innerText = scripts.length + ' scripts';
+    const list = document.getElementById('scriptsList');
+    if (scripts.length === 0) {
+        list.innerHTML = '<p class="text-zinc-500 text-center py-20">No hay scripts todavía</p>';
+        return;
+    }
+    list.innerHTML = scripts.map(s => {
+        const ls = `loadstring(game:HttpGet("${location.origin}/api/script/${s.id}"))()`;
+        return `
+        <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
+            <div class="flex justify-between items-start mb-4">
+                <div>
+                    <div class="font-semibold text-lg text-indigo-300">${escapeHtml(s.name || 'Sin nombre')}</div>
+                    <div class="text-xs text-zinc-500 mt-1.5">ID: ${s.id} • <span class="text-emerald-400">${s.executions || 0} ejecuciones</span></div>
+                </div>
+                <button onclick="deleteScript('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
+            </div>
+            <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">${ls}</textarea>
+            <button onclick="navigator.clipboard.writeText(\`${ls}\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
+        </div>`;
+    }).join('');
+}
+
+function filterScripts() {
+    const q = document.getElementById('scriptSearch').value.toLowerCase();
+    const filtered = allScripts.filter(s => (s.name || '').toLowerCase().includes(q) || s.id.includes(q));
+    renderScriptsList(filtered);
+}
+
+function updateStatsAndRanking() {
+    const totalExec = allScripts.reduce((sum, s) => sum + (s.executions || 0), 0);
+    const maxExec = Math.max(...allScripts.map(s => s.executions || 0), 1);
+    const topScript = allScripts.length ? [...allScripts].sort((a,b) => (b.executions||0)-(a.executions||0))[0] : null;
+
+    document.getElementById('statTotal').innerText = allScripts.length;
+    document.getElementById('statExecutions').innerText = totalExec.toLocaleString();
+    document.getElementById('statTop').innerText = topScript ? (topScript.name || 'Sin nombre') : '—';
+
+    const tbody = document.getElementById('executionsTable');
+    if (allScripts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts</td></tr>';
+        return;
+    }
+    const sorted = [...allScripts].sort((a, b) => (b.executions || 0) - (a.executions || 0));
+    tbody.innerHTML = sorted.map((s, i) => {
+        const count = s.executions || 0;
+        const percent = Math.round((count / maxExec) * 100);
+        const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+        return `
+        <tr class="border-t border-white/5 hover:bg-white/[0.02]">
+            <td class="px-6 py-5 text-lg">${medal}</td>
+            <td class="px-6 py-5">
+                <div class="font-medium text-indigo-300">${escapeHtml(s.name || 'Sin nombre')}</div>
+                <div class="text-xs text-zinc-500 mt-0.5">${s.id.slice(0,14)}...</div>
+            </td>
+            <td class="px-6 py-5"><span class="text-xl font-bold text-emerald-400">${count}</span></td>
+            <td class="px-6 py-5">
+                <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
+                    <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width:${percent}%"></div>
+                </div>
+                <div class="text-xs text-zinc-500 mt-1.5">${percent}%</div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function loadExecutorStats() {
+    try {
+        const res = await fetch('/api/executor-stats', { headers: { 'x-panel-password': panelPass } });
+        if (res.status === 401) return logout();
+        const stats = await res.json();
+
+        document.getElementById('execsCount').innerText = stats.length + ' ejecutores únicos';
+        const tbody = document.getElementById('executorsTable');
+        if (stats.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">No hay datos de ejecutores todavía</td></tr>';
+            return;
+        }
+
+        const maxCount = Math.max(...stats.map(s => s.count), 1);
+        tbody.innerHTML = stats.map((s, i) => {
+            const percent = Math.round((s.count / maxCount) * 100);
+            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
+            return `
+            <tr class="border-t border-white/5 hover:bg-white/[0.02]">
+                <td class="px-6 py-5 text-lg">${medal}</td>
+                <td class="px-6 py-5 font-semibold text-indigo-300">${escapeHtml(s.name)}</td>
+                <td class="px-6 py-5"><span class="bg-zinc-800/80 px-3 py-1 rounded-lg text-xs font-mono text-emerald-400">${escapeHtml(s.version)}</span></td>
+                <td class="px-6 py-5 font-bold text-emerald-400">${s.count}</td>
+                <td class="px-6 py-5">
+                    <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
+                        <div class="bar-fill h-full bg-gradient-to-r from-purple-500 to-indigo-400 rounded-full" style="width:${percent}%"></div>
+                    </div>
+                    <div class="text-xs text-zinc-500 mt-1">${percent}%</div>
+                </td>
+            </tr>`;
+        }).join('');
+    } catch {
+        document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar estadísticas</td></tr>';
     }
 }
 
@@ -460,7 +551,6 @@ async function loadLogs() {
         const logs = await res.json();
 
         document.getElementById('logsCount').innerText = logs.length + ' registros';
-
         const tbody = document.getElementById('logsTable');
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Nadie ha ejecutado scripts todavía</td></tr>';
@@ -473,16 +563,16 @@ async function loadLogs() {
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             const ua = (log.userAgent || 'Desconocido').slice(0, 70);
-            return \`
+            return `
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
-                <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">\${date}</td>
+                <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">${date}</td>
                 <td class="px-6 py-4">
-                    <div class="font-medium text-indigo-300">\${escapeHtml(log.scriptName || 'Sin nombre')}</div>
-                    <div class="text-xs text-zinc-500">\${log.scriptId?.slice(0,12) || ''}...</div>
+                    <div class="font-medium text-indigo-300">${escapeHtml(log.scriptName || 'Sin nombre')}</div>
+                    <div class="text-xs text-zinc-500">${log.scriptId?.slice(0,12) || ''}...</div>
                 </td>
-                <td class="px-6 py-4 font-mono text-sm text-emerald-400">\${log.ip || '???'}</td>
-                <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="\${escapeHtml(log.userAgent || '')}">\${escapeHtml(ua)}</td>
-            </tr>\`;
+                <td class="px-6 py-4 font-mono text-sm text-emerald-400">${log.ip || '???'}</td>
+                <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="${escapeHtml(log.userAgent || '')}">${escapeHtml(ua)}</td>
+            </tr>`;
         }).join('');
     } catch {
         document.getElementById('logsTable').innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
@@ -496,6 +586,20 @@ async function clearLogs() {
         headers: { 'x-panel-password': panelPass }
     });
     loadLogs();
+}
+
+async function testWebhook() {
+    try {
+        const res = await fetch('/api/test-webhook', {
+            method: 'POST',
+            headers: { 'x-panel-password': panelPass }
+        });
+        const data = await res.json();
+        if (data.success) alert('¡Mensaje de prueba enviado a Discord con éxito!');
+        else alert('Error al enviar notificación');
+    } catch {
+        alert('Error de conexión');
+    }
 }
 
 function escapeHtml(t) {
@@ -538,7 +642,7 @@ async function saveScript() {
         const data = await res.json();
 
         if (data.id) {
-            document.getElementById('resultOutput').value = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()\`;
+            document.getElementById('resultOutput').value = `loadstring(game:HttpGet("${location.origin}/api/script/${data.id}"))()`;
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
@@ -559,12 +663,22 @@ async function saveScript() {
     }
 }
 
-function loadEditScript() {
+async function loadEditScript() {
     const id = document.getElementById('editSelect').value;
-    const script = allScripts.find(s => s.id === id);
-    if (script) {
-        document.getElementById('editName').value = script.name || '';
+    if (!id) {
+        document.getElementById('editName').value = '';
         document.getElementById('editCode').value = '';
+        return;
+    }
+    try {
+        const res = await fetch('/api/script/' + id + '/raw', { headers: { 'x-panel-password': panelPass } });
+        const script = await res.json();
+        if (script) {
+            document.getElementById('editName').value = script.name || '';
+            document.getElementById('editCode').value = script.rawCode || '';
+        }
+    } catch {
+        alert('Error al cargar script para editar');
     }
 }
 
@@ -576,7 +690,7 @@ async function updateScript() {
     if (!code) return alert('Pega el nuevo código');
 
     const btn = document.getElementById('editBtn');
-    btn.innerText = 'Guardando...';
+    btn.innerText = 'Actualizando...';
     btn.disabled = true;
 
     try {
@@ -589,19 +703,18 @@ async function updateScript() {
         if (data.success) {
             btn.innerText = '¡Actualizado!';
             setTimeout(() => {
-                btn.innerText = '💾 Guardar Cambios';
+                btn.innerText = '💾 Guardar y Re-ofuscar';
                 btn.disabled = false;
             }, 1500);
-            document.getElementById('editCode').value = '';
             loadScripts();
         } else {
-            alert('Error');
-            btn.innerText = '💾 Guardar Cambios';
+            alert('Error al actualizar');
+            btn.innerText = '💾 Guardar y Re-ofuscar';
             btn.disabled = false;
         }
     } catch {
         alert('Error de conexión');
-        btn.innerText = '💾 Guardar Cambios';
+        btn.innerText = '💾 Guardar y Re-ofuscar';
         btn.disabled = false;
     }
 }
@@ -624,13 +737,23 @@ document.getElementById('passInput')?.addEventListener('keypress', e => {
 `);
 });
 
-// ====================== API ======================
+// ====================== API ENDPOINTS ======================
 app.get('/api/scripts', requireAuth, async (req, res) => {
     try {
-        const scripts = await ScriptModel.find({}, { code: 0 }).sort({ createdAt: -1 });
+        const scripts = await ScriptModel.find({}, { code: 0, rawCode: 0 }).sort({ createdAt: -1 });
         res.json(scripts);
     } catch {
         res.json([]);
+    }
+});
+
+app.get('/api/script/:id/raw', requireAuth, async (req, res) => {
+    try {
+        const script = await ScriptModel.findOne({ id: req.params.id }, { code: 0 });
+        if (!script) return res.status(404).json({ error: 'No encontrado' });
+        res.json(script);
+    } catch {
+        res.status(500).json({ error: 'Error' });
     }
 });
 
@@ -652,14 +775,66 @@ app.delete('/api/executions', requireAuth, async (req, res) => {
     }
 });
 
+// Nuevo endpoint para ranking de ejecutores
+app.get('/api/executor-stats', requireAuth, async (req, res) => {
+    try {
+        const logs = await ExecutionModel.find().lean();
+        const stats = {};
+
+        logs.forEach(log => {
+            const ua = (log.userAgent || 'Desconocido').toLowerCase();
+            let name = 'Desconocido / Navegador';
+            let version = 'N/A';
+
+            if (ua.includes('solara')) { name = 'Solara'; }
+            else if (ua.includes('wave')) { name = 'Wave'; }
+            else if (ua.includes('delta')) { name = 'Delta'; }
+            else if (ua.includes('fluxus')) { name = 'Fluxus'; }
+            else if (ua.includes('hydrogen')) { name = 'Hydrogen'; }
+            else if (ua.includes('krnl')) { name = 'Krnl'; }
+            else if (ua.includes('synapse') || ua.includes('syn')) { name = 'Synapse / Synapse Z'; }
+            else if (ua.includes('electron')) { name = 'Electron'; }
+            else if (ua.includes('codex')) { name = 'Codex'; }
+            else if (ua.includes('arceus')) { name = 'Arceus X'; }
+            else if (ua.includes('macsploit')) { name = 'MacSploit'; }
+            else if (/chrome|firefox|safari|edg|opera|brave/i.test(ua)) { name = 'Navegador Web'; }
+
+            const matchVersion = ua.match(/(?:v|version|ver|\/)\s*(\d+\.\d+(?:\.\d+)?)/i);
+            if (matchVersion && matchVersion[1]) {
+                version = matchVersion[1];
+            }
+
+            const key = `${name}_${version}`;
+            if (!stats[key]) {
+                stats[key] = { name, version, count: 0 };
+            }
+            stats[key].count++;
+        });
+
+        const result = Object.values(stats).sort((a, b) => b.count - a.count);
+        res.json(result);
+    } catch {
+        res.json([]);
+    }
+});
+
+app.post('/api/test-webhook', requireAuth, async (req, res) => {
+    await sendDiscordLog("🔔 Prueba de Webhook", "¡La conexión con el panel de **Ikgonavi Hub Pro** funciona correctamente!", 0x3498DB);
+    res.json({ success: true });
+});
+
 app.post('/api/script', requireAuth, async (req, res) => {
     try {
         const { name, code } = req.body;
         if (!code) return res.status(400).json({ error: 'Falta el código' });
         const protectedCode = obfuscate(code);
-        const doc = new ScriptModel({ name: name || 'Sin nombre', code: protectedCode });
+        const doc = new ScriptModel({ 
+            name: name || 'Sin nombre', 
+            code: protectedCode,
+            rawCode: code 
+        });
         await doc.save();
-        sendDiscordLog("🔒 Nuevo Script Ofuscado", `**Nombre:** ${doc.name}\\n**ID:** \`${doc.id}\``, 0x5865F2);
+        sendDiscordLog("🔒 Nuevo Script Ofuscado", `**Nombre:** ${doc.name}\n**ID:** \`${doc.id}\``, 0x5865F2);
         res.json({ id: doc.id });
     } catch {
         res.status(500).json({ error: 'Error interno' });
@@ -673,11 +848,15 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
         const protectedCode = obfuscate(code);
         const updated = await ScriptModel.findOneAndUpdate(
             { id: req.params.id },
-            { name: name || 'Sin nombre', code: protectedCode },
+            { 
+                name: name || 'Sin nombre', 
+                code: protectedCode,
+                rawCode: code 
+            },
             { new: true }
         );
         if (!updated) return res.status(404).json({ error: 'No encontrado' });
-        sendDiscordLog("✏️ Script Actualizado", `**Nombre:** ${updated.name}\\n**ID:** \`${updated.id}\``, 0xFEE75C);
+        sendDiscordLog("✏️ Script Actualizado", `**Nombre:** ${updated.name}\n**ID:** \`${updated.id}\``, 0xFEE75C);
         res.json({ success: true });
     } catch {
         res.status(500).json({ error: 'Error interno' });
@@ -694,7 +873,7 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Cuando ejecutan el script
+// Cuando ejecutan el script en Roblox
 app.get('/api/script/:id', async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
 
@@ -714,7 +893,6 @@ app.get('/api/script/:id', async (req, res) => {
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Desconocida').toString().split(',')[0].trim();
         const userAgent = req.headers['user-agent'] || 'Desconocido';
 
-        // Guardar en historial
         await ExecutionModel.create({
             scriptId: script.id,
             scriptName: script.name || 'Sin nombre',
@@ -722,10 +900,9 @@ app.get('/api/script/:id', async (req, res) => {
             userAgent
         });
 
-        // Log Discord
         sendDiscordLog(
             "📜 Script Ejecutado",
-            `**Nombre:** ${script.name || 'Sin nombre'}\\n**ID:** \`${script.id}\`\\n**Ejecuciones:** ${script.executions}\\n**IP:** \`${ip}\`\\n**UA:** \`${userAgent.slice(0, 80)}\``,
+            `**Nombre:** ${script.name || 'Sin nombre'}\n**ID:** \`${script.id}\`\n**Ejecuciones:** ${script.executions}\n**IP:** \`${ip}\`\n**UA:** \`${userAgent.slice(0, 80)}\``,
             0x57F287
         );
 
