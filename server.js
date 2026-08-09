@@ -8,7 +8,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ====================== CONFIGURACIÓN ======================
-const PANEL_PASSWORD = "CambiaEstaContraseña123!"; // ← CAMBIA ESTA
+const PANEL_PASSWORD = "CambiaЭтаContraseña123!"; // ← CAMBIA ESTA
 // La webhook se protege mediante variable de entorno (o usa la tuya por defecto si no está definida)
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1536109822188191746/n-sh2GrGqp1zCTVBoYPzVacaRaCoAsXPyvj4zhVorTGbloeqwu5dSIOuK9SQhf4wCIiv";
 const PORT = process.env.PORT || 3000;
@@ -144,7 +144,6 @@ app.get('/api/script/:id/raw', requireAuth, async (req, res) => {
     }
 });
 
-// ACTUALIZAR SCRIPT (Manda el mensaje a Discord)
 app.put('/api/script/:id', requireAuth, async (req, res) => {
     try {
         const { name, code } = req.body;
@@ -159,7 +158,6 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
 
         if (!script) return res.status(404).json({ error: 'No encontrado' });
 
-        // 🔔 AVISO DE SCRIPT ACTUALIZADO A DISCORD
         await sendDiscordLog("🔄 Script actualizado !", `El script **${script.name}** (\`${script.id}\`) ha sido modificado y re-ofuscado correctamente.`, 0xF59E0B);
 
         res.json({ success: true });
@@ -593,8 +591,8 @@ function renderScriptsList(scripts) {
         return;
     }
     list.innerHTML = scripts.map(s => {
-        const ls = 'loadstring(game:HttpGet("' + location.origin + '/api/script/' + s.id + '"))()';
-        return `
+        const ls = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${s.id}"))()\`;
+        return \`
         <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
             <div class="flex justify-between items-start mb-4">
                 <div>
@@ -604,8 +602,8 @@ function renderScriptsList(scripts) {
                 <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
             </div>
             <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
-            <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
-        </div>`;
+            <button onclick="navigator.clipboard.writeText('\${ls}'); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
+        </div>\`;
     }).join('');
 }
 
@@ -634,7 +632,7 @@ function updateStatsAndRanking() {
         const count = s.executions || 0;
         const percent = Math.round((count / maxExec) * 100);
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-        return `
+        return \`
         <tr class="border-t border-white/5 hover:bg-white/[0.02]">
             <td class="px-6 py-5 text-lg">\${medal}</td>
             <td class="px-6 py-5">
@@ -648,7 +646,7 @@ function updateStatsAndRanking() {
                 </div>
                 <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
             </td>
-        </tr>`;
+        </tr>\`;
     }).join('');
 }
 
@@ -669,7 +667,7 @@ async function loadExecutorStats() {
         tbody.innerHTML = stats.map((s, i) => {
             const percent = Math.round((s.count / maxCount) * 100);
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-            return `
+            return \`
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
                 <td class="px-6 py-5 text-lg">\${medal}</td>
                 <td class="px-6 py-5 font-semibold text-indigo-300">\${escapeHtml(s.name)}</td>
@@ -681,7 +679,7 @@ async function loadExecutorStats() {
                     </div>
                     <div class="text-xs text-zinc-500 mt-1">\${percent}%</div>
                 </td>
-            </tr>`;
+            </tr>\`;
         }).join('');
     } catch {
         document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar estadísticas</td></tr>';
@@ -707,7 +705,7 @@ async function loadLogs() {
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             const ua = (log.userAgent || 'Desconocido').slice(0, 70);
-            return `
+            return \`
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
                 <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">\${date}</td>
                 <td class="px-6 py-4">
@@ -716,7 +714,7 @@ async function loadLogs() {
                 </td>
                 <td class="px-6 py-4 font-mono text-sm text-emerald-400">\${log.ip || '???'}</td>
                 <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="\${escapeHtml(log.userAgent || '')}">\${escapeHtml(ua)}</td>
-            </tr>`;
+            </tr>\`;
         }).join('');
     } catch {
         document.getElementById('logsTable').innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
@@ -786,7 +784,7 @@ async function saveScript() {
         const data = await res.json();
 
         if (data.id) {
-            document.getElementById('resultOutput').value = `loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()`;
+            document.getElementById('resultOutput').value = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()\`;
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
