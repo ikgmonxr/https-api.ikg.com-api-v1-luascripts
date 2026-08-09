@@ -27,8 +27,8 @@ mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3V
 const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
     id: { type: String, default: () => crypto.randomBytes(16).toString('hex') },
     name: String,
-    code: String,       // Código ofuscado servido a Roblox
-    rawCode: String,    // Código original para poder editarlo
+    code: String,
+    rawCode: String,
     executions: { type: Number, default: 0 },
     createdAt: { type: Date, default: Date.now }
 }));
@@ -227,7 +227,7 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <div id="scriptsList" class="grid gap-5"><p class="text-zinc-500 text-center py-20">Cargando...</p></div>
 </div>
 
-<!-- EJECUCIONES (RANKING DE SCRIPTS) -->
+<!-- EJECUCIONES -->
 <div id="page-executions" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
@@ -274,7 +274,7 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 </div>
 
-<!-- EXECUTORS RANKINGS (NUEVA SECCIÓN) -->
+<!-- EXECUTORS RANKINGS -->
 <div id="page-executors" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
@@ -435,7 +435,7 @@ async function loadScripts() {
 
         const select = document.getElementById('editSelect');
         select.innerHTML = '<option value="">-- Elige un script --</option>' + 
-            allScripts.map(s => `<option value="${s.id}">${escapeHtml(s.name || 'Sin nombre')} (${s.executions||0})</option>`).join('');
+            allScripts.map(s => '<option value="' + s.id + '">' + escapeHtml(s.name || 'Sin nombre') + ' (' + (s.executions||0) + ')</option>').join('');
     } catch {
         document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-20">Error al cargar</p>';
     }
@@ -449,19 +449,19 @@ function renderScriptsList(scripts) {
         return;
     }
     list.innerHTML = scripts.map(s => {
-        const ls = `loadstring(game:HttpGet("${location.origin}/api/script/${s.id}"))()`;
-        return `
+        const ls = 'loadstring(game:HttpGet("' + location.origin + '/api/script/' + s.id + '"))()';
+        return \`
         <div class="glass rounded-2xl p-6 hover:border-indigo-500/20 transition">
             <div class="flex justify-between items-start mb-4">
                 <div>
-                    <div class="font-semibold text-lg text-indigo-300">${escapeHtml(s.name || 'Sin nombre')}</div>
-                    <div class="text-xs text-zinc-500 mt-1.5">ID: ${s.id} • <span class="text-emerald-400">${s.executions || 0} ejecuciones</span></div>
+                    <div class="font-semibold text-lg text-indigo-300\">\${escapeHtml(s.name || 'Sin nombre')}</div>
+                    <div class="text-xs text-zinc-500 mt-1.5">ID: \${s.id} • <span class="text-emerald-400">\${s.executions || 0} ejecuciones</span></div>
                 </div>
-                <button onclick="deleteScript('${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
+                <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
             </div>
-            <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">${ls}</textarea>
-            <button onclick="navigator.clipboard.writeText(\`${ls}\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
-        </div>`;
+            <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
+            <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
+        </div>\`;
     }).join('');
 }
 
@@ -490,21 +490,21 @@ function updateStatsAndRanking() {
         const count = s.executions || 0;
         const percent = Math.round((count / maxExec) * 100);
         const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-        return `
+        return \`
         <tr class="border-t border-white/5 hover:bg-white/[0.02]">
-            <td class="px-6 py-5 text-lg">${medal}</td>
+            <td class="px-6 py-5 text-lg">\${medal}</td>
             <td class="px-6 py-5">
-                <div class="font-medium text-indigo-300">${escapeHtml(s.name || 'Sin nombre')}</div>
-                <div class="text-xs text-zinc-500 mt-0.5">${s.id.slice(0,14)}...</div>
+                <div class="font-medium text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
+                <div class="text-xs text-zinc-500 mt-0.5">\${s.id.slice(0,14)}...</div>
             </td>
-            <td class="px-6 py-5"><span class="text-xl font-bold text-emerald-400">${count}</span></td>
+            <td class="px-6 py-5"><span class="text-xl font-bold text-emerald-400">\${count}</span></td>
             <td class="px-6 py-5">
                 <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
-                    <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width:${percent}%"></div>
+                    <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width:\${percent}%"></div>
                 </div>
-                <div class="text-xs text-zinc-500 mt-1.5">${percent}%</div>
+                <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
             </td>
-        </tr>`;
+        </tr>\`;
     }).join('');
 }
 
@@ -525,19 +525,19 @@ async function loadExecutorStats() {
         tbody.innerHTML = stats.map((s, i) => {
             const percent = Math.round((s.count / maxCount) * 100);
             const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
-            return `
+            return \`
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
-                <td class="px-6 py-5 text-lg">${medal}</td>
-                <td class="px-6 py-5 font-semibold text-indigo-300">${escapeHtml(s.name)}</td>
-                <td class="px-6 py-5"><span class="bg-zinc-800/80 px-3 py-1 rounded-lg text-xs font-mono text-emerald-400">${escapeHtml(s.version)}</span></td>
-                <td class="px-6 py-5 font-bold text-emerald-400">${s.count}</td>
+                <td class="px-6 py-5 text-lg">\${medal}</td>
+                <td class="px-6 py-5 font-semibold text-indigo-300">\${escapeHtml(s.name)}</td>
+                <td class="px-6 py-5"><span class="bg-zinc-800/80 px-3 py-1 rounded-lg text-xs font-mono text-emerald-400">\${escapeHtml(s.version)}</span></td>
+                <td class="px-6 py-5 font-bold text-emerald-400">\${s.count}</td>
                 <td class="px-6 py-5">
                     <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
-                        <div class="bar-fill h-full bg-gradient-to-r from-purple-500 to-indigo-400 rounded-full" style="width:${percent}%"></div>
+                        <div class="bar-fill h-full bg-gradient-to-r from-purple-500 to-indigo-400 rounded-full" style="width:\${percent}%"></div>
                     </div>
-                    <div class="text-xs text-zinc-500 mt-1">${percent}%</div>
+                    <div class="text-xs text-zinc-500 mt-1">\${percent}%</div>
                 </td>
-            </tr>`;
+            </tr>\`;
         }).join('');
     } catch {
         document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar estadísticas</td></tr>';
@@ -563,16 +563,16 @@ async function loadLogs() {
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
             const ua = (log.userAgent || 'Desconocido').slice(0, 70);
-            return `
+            return \`
             <tr class="border-t border-white/5 hover:bg-white/[0.02]">
-                <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">${date}</td>
+                <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">\${date}</td>
                 <td class="px-6 py-4">
-                    <div class="font-medium text-indigo-300">${escapeHtml(log.scriptName || 'Sin nombre')}</div>
-                    <div class="text-xs text-zinc-500">${log.scriptId?.slice(0,12) || ''}...</div>
+                    <div class="font-medium text-indigo-300">\${escapeHtml(log.scriptName || 'Sin nombre')}</div>
+                    <div class="text-xs text-zinc-500">\${log.scriptId?.slice(0,12) || ''}...</div>
                 </td>
-                <td class="px-6 py-4 font-mono text-sm text-emerald-400">${log.ip || '???'}</td>
-                <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="${escapeHtml(log.userAgent || '')}">${escapeHtml(ua)}</td>
-            </tr>`;
+                <td class="px-6 py-4 font-mono text-sm text-emerald-400">\${log.ip || '???'}</td>
+                <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="\${escapeHtml(log.userAgent || '')}">\${escapeHtml(ua)}</td>
+            </tr>\`;
         }).join('');
     } catch {
         document.getElementById('logsTable').innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
@@ -642,7 +642,7 @@ async function saveScript() {
         const data = await res.json();
 
         if (data.id) {
-            document.getElementById('resultOutput').value = `loadstring(game:HttpGet("${location.origin}/api/script/${data.id}"))()`;
+            document.getElementById('resultOutput').value = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()\`;
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
@@ -775,7 +775,6 @@ app.delete('/api/executions', requireAuth, async (req, res) => {
     }
 });
 
-// Nuevo endpoint para ranking de ejecutores
 app.get('/api/executor-stats', requireAuth, async (req, res) => {
     try {
         const logs = await ExecutionModel.find().lean();
@@ -873,7 +872,6 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     }
 });
 
-// Cuando ejecutan el script en Roblox
 app.get('/api/script/:id', async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
 
