@@ -16,7 +16,7 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '2mb' }));
 
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50 });
+const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 60 });
 app.use('/api/', limiter);
 
 // ====================== BASE DE DATOS ======================
@@ -29,6 +29,15 @@ const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
     name: String,
     code: String,
     executions: { type: Number, default: 0 },
+    createdAt: { type: Date, default: Date.now }
+}));
+
+// Nuevo: historial de quién ejecuta
+const ExecutionModel = mongoose.model('HubExecution', new mongoose.Schema({
+    scriptId: String,
+    scriptName: String,
+    ip: String,
+    userAgent: String,
     createdAt: { type: Date, default: Date.now }
 }));
 
@@ -123,11 +132,8 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <h1 class="text-2xl font-bold tracking-tight">Ikgonavi Hub Pro</h1>
 <p class="text-indigo-400 text-sm mt-2">Panel de Control Avanzado</p>
 </div>
-<input type="password" id="passInput" placeholder="Contraseña del panel" 
-class="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-2xl px-5 py-4 mb-5 outline-none focus:border-indigo-500 transition">
-<button onclick="login()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
-Entrar al Panel
-</button>
+<input type="password" id="passInput" placeholder="Contraseña del panel" class="w-full bg-zinc-900/80 border border-zinc-700/50 rounded-2xl px-5 py-4 mb-5 outline-none focus:border-indigo-500 transition">
+<button onclick="login()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">Entrar al Panel</button>
 <p id="loginError" class="text-red-400 text-sm text-center mt-5 hidden">Contraseña incorrecta</p>
 </div>
 </div>
@@ -135,7 +141,6 @@ Entrar al Panel
 <!-- DASHBOARD -->
 <div id="dashboard" class="hidden min-h-screen">
 <div class="flex">
-<!-- SIDEBAR -->
 <aside class="w-72 glass min-h-screen p-6 flex flex-col fixed left-0 top-0 border-r border-white/5">
 <div class="flex items-center gap-3 mb-12 px-2">
 <div class="w-11 h-11 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl flex items-center justify-center text-xl shadow-lg shadow-indigo-500/20">⚡</div>
@@ -155,6 +160,9 @@ Entrar al Panel
 <button onclick="showPage('executions')" id="nav-executions" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
 <span class="text-lg">📊</span> Ejecuciones
 </button>
+<button onclick="showPage('logs')" id="nav-logs" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
+<span class="text-lg">👁️</span> Quién Ejecuta
+</button>
 <button onclick="showPage('edit')" id="nav-edit" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
 <span class="text-lg">✏️</span> Editar Scripts
 </button>
@@ -165,44 +173,33 @@ Entrar al Panel
 </button>
 </aside>
 
-<!-- MAIN -->
 <main class="ml-72 flex-1 p-10">
 
 <!-- OFUSCADOR -->
 <div id="page-obfuscator" class="page">
 <div class="mb-10">
 <h2 class="text-3xl font-bold tracking-tight">Ofuscador</h2>
-<p class="text-zinc-400 mt-1">Pega tu código Lua y ofúscalo automáticamente con protección Base64</p>
+<p class="text-zinc-400 mt-1">Pega tu código Lua y ofúscalo automáticamente</p>
 </div>
-
 <div class="glass rounded-3xl p-8 max-w-3xl">
 <div class="mb-6">
 <label class="text-sm text-zinc-400 mb-2 block font-medium">Nombre del Script</label>
-<input id="scriptName" type="text" placeholder="Ej: Silent Aim, ESP, Kill Aura..." 
-class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
+<input id="scriptName" type="text" placeholder="Ej: Silent Aim, ESP..." class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 </div>
-
 <div class="mb-6">
 <div class="flex justify-between items-center mb-2">
 <label class="text-sm text-zinc-400 font-medium">Código Lua</label>
-<button onclick="pasteCode()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">📋 Pegar del portapapeles</button>
+<button onclick="pasteCode()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">📋 Pegar</button>
 </div>
-<textarea id="scriptCode" placeholder="Pega aquí tu código Lua..." 
-class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
+<textarea id="scriptCode" placeholder="Pega aquí tu código..." class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
-
-<button id="saveBtn" onclick="saveScript()" 
-class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
-🔒 Ofuscar y Guardar
-</button>
-
+<button id="saveBtn" onclick="saveScript()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">🔒 Ofuscar y Guardar</button>
 <div class="mt-8">
 <div class="flex justify-between items-center mb-2">
 <label class="text-sm text-zinc-400 font-medium">Loadstring generado</label>
 <button onclick="copyResult()" class="text-xs text-indigo-400 hover:text-indigo-300 font-medium">Copiar</button>
 </div>
-<textarea id="resultOutput" readonly placeholder="El loadstring aparecerá aquí después de ofuscar..." 
-class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-24 font-mono text-xs text-emerald-400 outline-none resize-none"></textarea>
+<textarea id="resultOutput" readonly placeholder="El loadstring aparecerá aquí..." class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-24 font-mono text-xs text-emerald-400 outline-none resize-none"></textarea>
 </div>
 </div>
 </div>
@@ -212,28 +209,27 @@ class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-2
 <div class="flex justify-between items-end mb-10">
 <div>
 <h2 class="text-3xl font-bold tracking-tight">Scripts</h2>
-<p class="text-zinc-400 mt-1">Todos tus scripts ofuscados y listos para usar</p>
+<p class="text-zinc-400 mt-1">Todos tus scripts ofuscados</p>
 </div>
 <span id="scriptCount" class="bg-indigo-950/60 text-indigo-300 text-sm px-5 py-2 rounded-full border border-indigo-800/40 font-medium">0 scripts</span>
 </div>
-<div id="scriptsList" class="grid gap-5"><p class="text-zinc-500 text-center py-20">Cargando scripts...</p></div>
+<div id="scriptsList" class="grid gap-5"><p class="text-zinc-500 text-center py-20">Cargando...</p></div>
 </div>
 
-<!-- EJECUCIONES -->
+<!-- EJECUCIONES (RANKING) -->
 <div id="page-executions" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
 <h2 class="text-3xl font-bold tracking-tight">📊 Ejecuciones</h2>
-<p class="text-zinc-400 mt-1">Estadísticas de uso de tus scripts</p>
+<p class="text-zinc-400 mt-1">Estadísticas y ranking de tus scripts</p>
 </div>
 <button onclick="loadScripts()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
 </div>
 
-<!-- Stats Cards -->
 <div id="statsCards" class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
 <div class="glass rounded-2xl p-6">
 <div class="text-zinc-400 text-sm font-medium mb-1">Total de Scripts</div>
-<div id="statTotal" class="text-3xl font-bold text-white">0</div>
+<div id="statTotal" class="text-3xl font-bold">0</div>
 </div>
 <div class="glass rounded-2xl p-6">
 <div class="text-zinc-400 text-sm font-medium mb-1">Ejecuciones Totales</div>
@@ -245,7 +241,6 @@ class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-2
 </div>
 </div>
 
-<!-- Tabla de Ejecuciones -->
 <div class="glass rounded-3xl overflow-hidden">
 <div class="px-6 py-5 border-b border-white/5">
 <h3 class="font-semibold text-lg">Ranking de Scripts</h3>
@@ -261,7 +256,43 @@ class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-2
 </tr>
 </thead>
 <tbody id="executionsTable">
-<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando datos...</td></tr>
+<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando...</td></tr>
+</tbody>
+</table>
+</div>
+</div>
+</div>
+
+<!-- QUIÉN EJECUTA (NUEVA SECCIÓN) -->
+<div id="page-logs" class="page hidden">
+<div class="flex justify-between items-end mb-10">
+<div>
+<h2 class="text-3xl font-bold tracking-tight">👁️ Quién Ejecuta</h2>
+<p class="text-zinc-400 mt-1">Historial de las personas que usan tus scripts</p>
+</div>
+<div class="flex gap-3">
+<button onclick="loadLogs()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
+<button onclick="clearLogs()" class="text-sm bg-red-950/50 hover:bg-red-900/50 text-red-300 px-5 py-2.5 rounded-xl font-medium transition">🗑️ Limpiar Historial</button>
+</div>
+</div>
+
+<div class="glass rounded-3xl overflow-hidden">
+<div class="px-6 py-5 border-b border-white/5 flex justify-between items-center">
+<h3 class="font-semibold text-lg">Últimas Ejecuciones</h3>
+<span id="logsCount" class="text-sm text-zinc-400">0 registros</span>
+</div>
+<div class="overflow-x-auto max-h-[600px] overflow-y-auto">
+<table class="w-full">
+<thead class="sticky top-0 bg-[#11131c]">
+<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">Fecha</th>
+<th class="px-6 py-4 font-medium">Script</th>
+<th class="px-6 py-4 font-medium">IP</th>
+<th class="px-6 py-4 font-medium">User-Agent / Executor</th>
+</tr>
+</thead>
+<tbody id="logsTable">
+<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando historial...</td></tr>
 </tbody>
 </table>
 </div>
@@ -274,12 +305,10 @@ class="w-full bg-zinc-950/80 border border-zinc-800/50 rounded-2xl px-5 py-4 h-2
 <h2 class="text-3xl font-bold tracking-tight">Editar Scripts</h2>
 <p class="text-zinc-400 mt-1">Reemplaza el código de un script existente</p>
 </div>
-
 <div class="glass rounded-3xl p-8 max-w-3xl">
 <div class="mb-6">
 <label class="text-sm text-zinc-400 mb-2 block font-medium">Seleccionar Script</label>
-<select id="editSelect" onchange="loadEditScript()" 
-class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
+<select id="editSelect" onchange="loadEditScript()" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 outline-none focus:border-indigo-500 transition">
 <option value="">-- Elige un script --</option>
 </select>
 </div>
@@ -291,10 +320,7 @@ class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-3.5 o
 <label class="text-sm text-zinc-400 mb-2 block font-medium">Nuevo Código Lua</label>
 <textarea id="editCode" class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
-<button id="editBtn" onclick="updateScript()" 
-class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">
-💾 Guardar Cambios
-</button>
+<button id="editBtn" onclick="updateScript()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">💾 Guardar Cambios</button>
 </div>
 </div>
 
@@ -349,6 +375,7 @@ function showPage(page) {
     }
 
     if (page === 'scripts' || page === 'edit' || page === 'executions') loadScripts();
+    if (page === 'logs') loadLogs();
 }
 
 async function loadScripts() {
@@ -359,7 +386,7 @@ async function loadScripts() {
 
         document.getElementById('scriptCount').innerText = allScripts.length + ' scripts';
 
-        // === SCRIPTS LIST ===
+        // Scripts list
         const list = document.getElementById('scriptsList');
         if (allScripts.length === 0) {
             list.innerHTML = '<p class="text-zinc-500 text-center py-20">No hay scripts todavía</p>';
@@ -373,18 +400,15 @@ async function loadScripts() {
                             <div class="font-semibold text-lg text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
                             <div class="text-xs text-zinc-500 mt-1.5">ID: \${s.id} • <span class="text-emerald-400">\${s.executions || 0} ejecuciones</span></div>
                         </div>
-                        <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-950/60 transition">Borrar</button>
+                        <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400 hover:text-red-300 px-3.5 py-1.5 rounded-xl bg-red-950/40 transition">Borrar</button>
                     </div>
                     <textarea readonly class="w-full bg-zinc-950/70 border border-zinc-800/50 rounded-xl p-3.5 text-xs font-mono text-zinc-400 h-16 resize-none">\${ls}</textarea>
-                    <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" 
-                    class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">
-                        Copiar Loadstring
-                    </button>
+                    <button onclick="navigator.clipboard.writeText(\\\`\${ls}\\\`); this.innerText='¡Copiado!'; setTimeout(()=>this.innerText='Copiar Loadstring',1500)" class="mt-4 w-full bg-indigo-600/90 hover:bg-indigo-500 py-2.5 rounded-xl text-sm font-medium transition">Copiar Loadstring</button>
                 </div>\`;
             }).join('');
         }
 
-        // === EJECUCIONES ===
+        // Stats + Ranking
         const totalExec = allScripts.reduce((sum, s) => sum + (s.executions || 0), 0);
         const maxExec = Math.max(...allScripts.map(s => s.executions || 0), 1);
         const topScript = allScripts.length ? [...allScripts].sort((a,b) => (b.executions||0)-(a.executions||0))[0] : null;
@@ -395,7 +419,7 @@ async function loadScripts() {
 
         const tbody = document.getElementById('executionsTable');
         if (allScripts.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts todavía</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts</td></tr>';
         } else {
             const sorted = [...allScripts].sort((a, b) => (b.executions || 0) - (a.executions || 0));
             tbody.innerHTML = sorted.map((s, i) => {
@@ -403,18 +427,16 @@ async function loadScripts() {
                 const percent = Math.round((count / maxExec) * 100);
                 const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : (i + 1);
                 return \`
-                <tr class="border-t border-white/5 hover:bg-white/[0.02] transition">
+                <tr class="border-t border-white/5 hover:bg-white/[0.02]">
                     <td class="px-6 py-5 text-lg">\${medal}</td>
                     <td class="px-6 py-5">
                         <div class="font-medium text-indigo-300">\${escapeHtml(s.name || 'Sin nombre')}</div>
-                        <div class="text-xs text-zinc-500 mt-0.5">\${s.id.slice(0,12)}...</div>
+                        <div class="text-xs text-zinc-500 mt-0.5">\${s.id.slice(0,14)}...</div>
                     </td>
-                    <td class="px-6 py-5">
-                        <span class="text-xl font-bold text-emerald-400">\${count}</span>
-                    </td>
+                    <td class="px-6 py-5"><span class="text-xl font-bold text-emerald-400">\${count}</span></td>
                     <td class="px-6 py-5">
                         <div class="w-full bg-zinc-800/60 rounded-full h-2.5 overflow-hidden">
-                            <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width: \${percent}%"></div>
+                            <div class="bar-fill h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full" style="width:\${percent}%"></div>
                         </div>
                         <div class="text-xs text-zinc-500 mt-1.5">\${percent}%</div>
                     </td>
@@ -425,15 +447,60 @@ async function loadScripts() {
         // Select editar
         const select = document.getElementById('editSelect');
         select.innerHTML = '<option value="">-- Elige un script --</option>' + 
-            allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')} (\${s.executions||0} exec)</option>\`).join('');
+            allScripts.map(s => \`<option value="\${s.id}">\${escapeHtml(s.name || 'Sin nombre')} (\${s.executions||0})</option>\`).join('');
     } catch {
         document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-20">Error al cargar</p>';
     }
 }
 
+async function loadLogs() {
+    try {
+        const res = await fetch('/api/executions', { headers: { 'x-panel-password': panelPass } });
+        if (res.status === 401) return logout();
+        const logs = await res.json();
+
+        document.getElementById('logsCount').innerText = logs.length + ' registros';
+
+        const tbody = document.getElementById('logsTable');
+        if (logs.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Nadie ha ejecutado scripts todavía</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = logs.map(log => {
+            const date = new Date(log.createdAt).toLocaleString('es-ES', { 
+                day: '2-digit', month: '2-digit', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', second: '2-digit'
+            });
+            const ua = (log.userAgent || 'Desconocido').slice(0, 70);
+            return \`
+            <tr class="border-t border-white/5 hover:bg-white/[0.02]">
+                <td class="px-6 py-4 text-sm text-zinc-400 whitespace-nowrap">\${date}</td>
+                <td class="px-6 py-4">
+                    <div class="font-medium text-indigo-300">\${escapeHtml(log.scriptName || 'Sin nombre')}</div>
+                    <div class="text-xs text-zinc-500">\${log.scriptId?.slice(0,12) || ''}...</div>
+                </td>
+                <td class="px-6 py-4 font-mono text-sm text-emerald-400">\${log.ip || '???'}</td>
+                <td class="px-6 py-4 text-xs text-zinc-400 max-w-xs truncate" title="\${escapeHtml(log.userAgent || '')}">\${escapeHtml(ua)}</td>
+            </tr>\`;
+        }).join('');
+    } catch {
+        document.getElementById('logsTable').innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
+    }
+}
+
+async function clearLogs() {
+    if (!confirm('¿Borrar TODO el historial de ejecuciones?')) return;
+    await fetch('/api/executions', {
+        method: 'DELETE',
+        headers: { 'x-panel-password': panelPass }
+    });
+    loadLogs();
+}
+
 function escapeHtml(t) {
     const d = document.createElement('div');
-    d.textContent = t;
+    d.textContent = t || '';
     return d.innerHTML;
 }
 
@@ -448,9 +515,9 @@ async function pasteCode() {
 
 function copyResult() {
     const val = document.getElementById('resultOutput').value;
-    if (!val) return alert('No hay loadstring generado');
+    if (!val) return alert('No hay loadstring');
     navigator.clipboard.writeText(val);
-    alert('¡Loadstring copiado!');
+    alert('¡Copiado!');
 }
 
 async function saveScript() {
@@ -475,11 +542,9 @@ async function saveScript() {
             document.getElementById('scriptCode').value = '';
             document.getElementById('scriptName').value = '';
             btn.innerText = '¡Listo!';
-            btn.classList.add('from-emerald-600', 'to-emerald-500');
             setTimeout(() => {
                 btn.innerText = '🔒 Ofuscar y Guardar';
                 btn.disabled = false;
-                btn.classList.remove('from-emerald-600', 'to-emerald-500');
             }, 1800);
             loadScripts();
         } else {
@@ -542,7 +607,7 @@ async function updateScript() {
 }
 
 async function deleteScript(id) {
-    if (!confirm('¿Borrar este script permanentemente?')) return;
+    if (!confirm('¿Borrar este script?')) return;
     await fetch('/api/script/' + id, {
         method: 'DELETE',
         headers: { 'x-panel-password': panelPass }
@@ -566,6 +631,24 @@ app.get('/api/scripts', requireAuth, async (req, res) => {
         res.json(scripts);
     } catch {
         res.json([]);
+    }
+});
+
+app.get('/api/executions', requireAuth, async (req, res) => {
+    try {
+        const logs = await ExecutionModel.find().sort({ createdAt: -1 }).limit(200);
+        res.json(logs);
+    } catch {
+        res.json([]);
+    }
+});
+
+app.delete('/api/executions', requireAuth, async (req, res) => {
+    try {
+        await ExecutionModel.deleteMany({});
+        res.json({ success: true });
+    } catch {
+        res.status(500).json({ error: 'Error' });
     }
 });
 
@@ -611,6 +694,7 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     }
 });
 
+// Cuando ejecutan el script
 app.get('/api/script/:id', async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
 
@@ -627,11 +711,21 @@ app.get('/api/script/:id', async (req, res) => {
 
         if (!script) return res.status(404).send('-- No encontrado');
 
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Desconocida';
+        const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'Desconocida').toString().split(',')[0].trim();
+        const userAgent = req.headers['user-agent'] || 'Desconocido';
 
+        // Guardar en historial
+        await ExecutionModel.create({
+            scriptId: script.id,
+            scriptName: script.name || 'Sin nombre',
+            ip,
+            userAgent
+        });
+
+        // Log Discord
         sendDiscordLog(
             "📜 Script Ejecutado",
-            `**Nombre:** ${script.name || 'Sin nombre'}\\n**ID:** \`${script.id}\`\\n**Ejecuciones:** ${script.executions}\\n**IP:** \`${ip}\`\\n**User-Agent:** \`${req.headers['user-agent'] || 'N/A'}\``,
+            `**Nombre:** ${script.name || 'Sin nombre'}\\n**ID:** \`${script.id}\`\\n**Ejecuciones:** ${script.executions}\\n**IP:** \`${ip}\`\\n**UA:** \`${userAgent.slice(0, 80)}\``,
             0x57F287
         );
 
