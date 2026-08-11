@@ -8,7 +8,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // ====================== CONFIGURACIÓN ======================
-const PANEL_PASSWORD = "CambiaEstaContraseña123!";
+const PANEL_PASSWORD = "CambiaEstaContraseña123!"; // ← CAMBIA ESTA
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "https://discord.com/api/webhooks/1536109822188191746/n-sh2GrGqp1zCTVBoYPzVacaRaCoAsXPyvj4zhVorTGbloeqwu5dSIOuK9SQhf4wCIiv";
 const PORT = process.env.PORT || 3000;
 
@@ -103,7 +103,6 @@ function requireAuth(req, res, next) {
 }
 
 // ====================== RUTAS API ======================
-
 app.get('/api/scripts', requireAuth, async (req, res) => {
     try {
         const scripts = await ScriptModel.find({}, { rawCode: 0 });
@@ -117,14 +116,12 @@ app.post('/api/script', requireAuth, async (req, res) => {
     try {
         const { name, code } = req.body;
         if (!code) return res.status(400).json({ error: 'Falta el código' });
-
         const obfuscated = obfuscate(code);
         const newScript = new ScriptModel({
             name: name || 'Sin nombre',
             code: obfuscated,
             rawCode: code
         });
-
         await newScript.save();
         sendDiscordLog("📜 Script Creado", `Se ha creado y ofuscado el script: **${name || 'Sin nombre'}**`, 0x10B981);
         res.json({ id: newScript.id });
@@ -147,18 +144,14 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
     try {
         const { name, code } = req.body;
         if (!code) return res.status(400).json({ error: 'Falta el código' });
-
         const obfuscated = obfuscate(code);
         const script = await ScriptModel.findOneAndUpdate(
             { id: req.params.id },
             { name: name || 'Sin nombre', code: obfuscated, rawCode: code },
             { new: true }
         );
-
         if (!script) return res.status(404).json({ error: 'No encontrado' });
-
-        await sendDiscordLog("🔄 Script actualizado !", `El script **${script.name}** (\`${script.id}\`) ha sido modificado y re-ofuscado correctamente.`, 0xF59E0B);
-
+        sendDiscordLog("🔄 Script actualizado", `El script **${script.name}** (\`${script.id}\`) ha sido modificado y re-ofuscado correctamente.`, 0xF59E0B);
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: 'Error al actualizar' });
@@ -195,7 +188,7 @@ app.get('/api/script/:id', async (req, res) => {
             userAgent
         });
 
-        res.send(script.code);
+        res.type('text/plain').send(script.code);
     } catch (err) {
         res.status(500).send('-- Error interno');
     }
@@ -290,35 +283,17 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <div class="text-xs text-indigo-400">Pro Panel</div>
 </div>
 </div>
-
 <nav class="flex flex-col gap-1.5 flex-1">
-<button onclick="showPage('obfuscator')" id="nav-obfuscator" class="sidebar-btn active flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium">
-<span class="text-lg">🔒</span> Ofuscador
-</button>
-<button onclick="showPage('scripts')" id="nav-scripts" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
-<span class="text-lg">📜</span> Scripts
-</button>
-<button onclick="showPage('executions')" id="nav-executions" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
-<span class="text-lg">📊</span> Ejecuciones
-</button>
-<button onclick="showPage('executors')" id="nav-executors" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
-<span class="text-lg">🤖</span> Execs Ranking
-</button>
-<button onclick="showPage('logs')" id="nav-logs" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
-<span class="text-lg">👁️</span> Quién Ejecuta
-</button>
-<button onclick="showPage('edit')" id="nav-edit" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400">
-<span class="text-lg">✏️</span> Editar Scripts
-</button>
+<button onclick="showPage('obfuscator')" id="nav-obfuscator" class="sidebar-btn active flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium"><span class="text-lg">🔒</span> Ofuscador</button>
+<button onclick="showPage('scripts')" id="nav-scripts" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400"><span class="text-lg">📜</span> Scripts</button>
+<button onclick="showPage('executions')" id="nav-executions" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400"><span class="text-lg">📊</span> Ejecuciones</button>
+<button onclick="showPage('executors')" id="nav-executors" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400"><span class="text-lg">🤖</span> Execs Ranking</button>
+<button onclick="showPage('logs')" id="nav-logs" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400"><span class="text-lg">👁️</span> Quién Ejecuta</button>
+<button onclick="showPage('edit')" id="nav-edit" class="sidebar-btn flex items-center gap-3 px-4 py-3.5 rounded-xl text-left text-sm font-medium text-zinc-400"><span class="text-lg">✏️</span> Editar Scripts</button>
 </nav>
-
 <div class="pt-4 border-t border-white/5 mt-auto flex flex-col gap-2">
-<button onclick="testWebhook()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-indigo-300 bg-indigo-950/30 hover:bg-indigo-900/40 transition">
-<span>🔔</span> Test Webhook Discord
-</button>
-<button onclick="logout()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-red-400 hover:bg-red-950/30 transition">
-<span>🚪</span> Cerrar Sesión
-</button>
+<button onclick="testWebhook()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-indigo-300 bg-indigo-950/30 hover:bg-indigo-900/40 transition"><span>🔔</span> Test Webhook Discord</button>
+<button onclick="logout()" class="flex items-center gap-3 px-4 py-3 rounded-xl text-xs text-red-400 hover:bg-red-950/30 transition"><span>🚪</span> Cerrar Sesión</button>
 </div>
 </aside>
 
@@ -377,54 +352,33 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 <button onclick="loadScripts()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
 </div>
-
 <div id="statsCards" class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
-<div class="glass rounded-2xl p-6">
-<div class="text-zinc-400 text-sm font-medium mb-1">Total de Scripts</div>
-<div id="statTotal" class="text-3xl font-bold">0</div>
+<div class="glass rounded-2xl p-6"><div class="text-zinc-400 text-sm font-medium mb-1">Total de Scripts</div><div id="statTotal" class="text-3xl font-bold">0</div></div>
+<div class="glass rounded-2xl p-6"><div class="text-zinc-400 text-sm font-medium mb-1">Ejecuciones Totales</div><div id="statExecutions" class="text-3xl font-bold text-emerald-400">0</div></div>
+<div class="glass rounded-2xl p-6"><div class="text-zinc-400 text-sm font-medium mb-1">Más Popular</div><div id="statTop" class="text-xl font-bold text-indigo-300 truncate">—</div></div>
 </div>
-<div class="glass rounded-2xl p-6">
-<div class="text-zinc-400 text-sm font-medium mb-1">Ejecuciones Totales</div>
-<div id="statExecutions" class="text-3xl font-bold text-emerald-400">0</div>
-</div>
-<div class="glass rounded-2xl p-6">
-<div class="text-zinc-400 text-sm font-medium mb-1">Más Popular</div>
-<div id="statTop" class="text-xl font-bold text-indigo-300 truncate">—</div>
-</div>
-</div>
-
 <div class="glass rounded-3xl overflow-hidden">
-<div class="px-6 py-5 border-b border-white/5">
-<h3 class="font-semibold text-lg">Ranking de Scripts</h3>
-</div>
+<div class="px-6 py-5 border-b border-white/5"><h3 class="font-semibold text-lg">Ranking de Scripts</h3></div>
 <div class="overflow-x-auto">
 <table class="w-full">
-<thead>
-<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
-<th class="px-6 py-4 font-medium">#</th>
-<th class="px-6 py-4 font-medium">Script</th>
-<th class="px-6 py-4 font-medium">Ejecuciones</th>
-<th class="px-6 py-4 font-medium w-1/3">Progreso</th>
-</tr>
-</thead>
-<tbody id="executionsTable">
-<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando...</td></tr>
-</tbody>
+<thead><tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">#</th><th class="px-6 py-4 font-medium">Script</th><th class="px-6 py-4 font-medium">Ejecuciones</th><th class="px-6 py-4 font-medium w-1/3">Progreso</th>
+</tr></thead>
+<tbody id="executionsTable"><tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando...</td></tr></tbody>
 </table>
 </div>
 </div>
 </div>
 
-<!-- EXECUTORS RANKINGS -->
+<!-- EXECUTORS RANKING -->
 <div id="page-executors" class="page hidden">
 <div class="flex justify-between items-end mb-10">
 <div>
 <h2 class="text-3xl font-bold tracking-tight">🤖 Ejecutores más Usados</h2>
-<p class="text-zinc-400 mt-1">Ranking y versiones de los ejecutores de Roblox detectados</p>
+<p class="text-zinc-400 mt-1">Ranking y versiones de los ejecutores detectados</p>
 </div>
 <button onclick="loadExecutorStats()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
 </div>
-
 <div class="glass rounded-3xl overflow-hidden">
 <div class="px-6 py-5 border-b border-white/5 flex justify-between items-center">
 <h3 class="font-semibold text-lg">Ranking de Execs & Versiones</h3>
@@ -432,18 +386,10 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 <div class="overflow-x-auto">
 <table class="w-full">
-<thead>
-<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
-<th class="px-6 py-4 font-medium">#</th>
-<th class="px-6 py-4 font-medium">Ejecutor</th>
-<th class="px-6 py-4 font-medium">Versión Detectada</th>
-<th class="px-6 py-4 font-medium">Total Usos</th>
-<th class="px-6 py-4 font-medium w-1/4">Popularidad</th>
-</tr>
-</thead>
-<tbody id="executorsTable">
-<tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">Cargando estadísticas...</td></tr>
-</tbody>
+<thead><tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">#</th><th class="px-6 py-4 font-medium">Ejecutor</th><th class="px-6 py-4 font-medium">Versión</th><th class="px-6 py-4 font-medium">Total Usos</th><th class="px-6 py-4 font-medium w-1/4">Popularidad</th>
+</tr></thead>
+<tbody id="executorsTable"><tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">Cargando...</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -454,14 +400,13 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <div class="flex justify-between items-end mb-10">
 <div>
 <h2 class="text-3xl font-bold tracking-tight">👁️ Quién Ejecuta</h2>
-<p class="text-zinc-400 mt-1">Historial detallado de las personas que usan tus scripts</p>
+<p class="text-zinc-400 mt-1">Historial de las personas que usan tus scripts</p>
 </div>
 <div class="flex gap-3">
 <button onclick="loadLogs()" class="text-sm bg-zinc-800/80 hover:bg-zinc-700 px-5 py-2.5 rounded-xl font-medium transition">🔄 Actualizar</button>
 <button onclick="clearLogs()" class="text-sm bg-red-950/50 hover:bg-red-900/50 text-red-300 px-5 py-2.5 rounded-xl font-medium transition">🗑️ Limpiar Historial</button>
 </div>
 </div>
-
 <div class="glass rounded-3xl overflow-hidden">
 <div class="px-6 py-5 border-b border-white/5 flex justify-between items-center">
 <h3 class="font-semibold text-lg">Últimas Ejecuciones</h3>
@@ -469,17 +414,10 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 <div class="overflow-x-auto max-h-[600px] overflow-y-auto">
 <table class="w-full">
-<thead class="sticky top-0 bg-[#11131c]">
-<tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
-<th class="px-6 py-4 font-medium">Fecha</th>
-<th class="px-6 py-4 font-medium">Script</th>
-<th class="px-6 py-4 font-medium">IP</th>
-<th class="px-6 py-4 font-medium">User-Agent / Executor</th>
-</tr>
-</thead>
-<tbody id="logsTable">
-<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando historial...</td></tr>
-</tbody>
+<thead class="sticky top-0 bg-[#11131c]"><tr class="text-left text-xs text-zinc-500 uppercase tracking-wider">
+<th class="px-6 py-4 font-medium">Fecha</th><th class="px-6 py-4 font-medium">Script</th><th class="px-6 py-4 font-medium">IP</th><th class="px-6 py-4 font-medium">User-Agent</th>
+</tr></thead>
+<tbody id="logsTable"><tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Cargando...</td></tr></tbody>
 </table>
 </div>
 </div>
@@ -489,7 +427,7 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 <div id="page-edit" class="page hidden">
 <div class="mb-10">
 <h2 class="text-3xl font-bold tracking-tight">Editar Scripts</h2>
-<p class="text-zinc-400 mt-1">Selecciona un script para ver su código actual y reemplazarlo</p>
+<p class="text-zinc-400 mt-1">Selecciona un script para ver y reemplazar su código</p>
 </div>
 <div class="glass rounded-3xl p-8 max-w-3xl">
 <div class="mb-6">
@@ -504,7 +442,7 @@ body { font-family: 'Inter', sans-serif; background: #0b0c10; color: #e2e8f0; }
 </div>
 <div class="mb-6">
 <label class="text-sm text-zinc-400 mb-2 block font-medium">Código Lua Actual / Nuevo</label>
-<textarea id="editCode" placeholder="Selecciona un script arriba para cargar su código..." class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
+<textarea id="editCode" placeholder="Selecciona un script arriba..." class="w-full bg-zinc-900/60 border border-zinc-700/40 rounded-2xl px-5 py-4 h-64 font-mono text-sm outline-none focus:border-indigo-500 transition resize-none"></textarea>
 </div>
 <button id="editBtn" onclick="updateScript()" class="w-full bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-500 hover:to-indigo-400 py-4 rounded-2xl font-semibold transition shadow-lg shadow-indigo-600/20">💾 Guardar y Re-ofuscar</button>
 </div>
@@ -549,7 +487,6 @@ function logout() {
 function showPage(page) {
     document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
     document.getElementById('page-' + page).classList.remove('hidden');
-
     document.querySelectorAll('.sidebar-btn').forEach(b => {
         b.classList.remove('active');
         b.classList.add('text-zinc-400');
@@ -559,7 +496,6 @@ function showPage(page) {
         active.classList.add('active');
         active.classList.remove('text-zinc-400');
     }
-
     if (page === 'scripts' || page === 'edit' || page === 'executions') loadScripts();
     if (page === 'logs') loadLogs();
     if (page === 'executors') loadExecutorStats();
@@ -570,12 +506,10 @@ async function loadScripts() {
         const res = await fetch('/api/scripts', { headers: { 'x-panel-password': panelPass } });
         if (res.status === 401) return logout();
         allScripts = await res.json();
-
         renderScriptsList(allScripts);
         updateStatsAndRanking();
-
         const select = document.getElementById('editSelect');
-        select.innerHTML = '<option value="">-- Elige un script --</option>' + 
+        select.innerHTML = '<option value="">-- Elige un script --</option>' +
             allScripts.map(s => '<option value="' + s.id + '">' + escapeHtml(s.name || 'Sin nombre') + ' (' + (s.executions||0) + ')</option>').join('');
     } catch {
         document.getElementById('scriptsList').innerHTML = '<p class="text-red-400 text-center py-20">Error al cargar</p>';
@@ -616,11 +550,9 @@ function updateStatsAndRanking() {
     const totalExec = allScripts.reduce((sum, s) => sum + (s.executions || 0), 0);
     const maxExec = Math.max(...allScripts.map(s => s.executions || 0), 1);
     const topScript = allScripts.length ? [...allScripts].sort((a,b) => (b.executions||0)-(a.executions||0))[0] : null;
-
     document.getElementById('statTotal').innerText = allScripts.length;
     document.getElementById('statExecutions').innerText = totalExec.toLocaleString();
     document.getElementById('statTop').innerText = topScript ? (topScript.name || 'Sin nombre') : '—';
-
     const tbody = document.getElementById('executionsTable');
     if (allScripts.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">No hay scripts</td></tr>';
@@ -654,14 +586,12 @@ async function loadExecutorStats() {
         const res = await fetch('/api/executor-stats', { headers: { 'x-panel-password': panelPass } });
         if (res.status === 401) return logout();
         const stats = await res.json();
-
         document.getElementById('execsCount').innerText = stats.length + ' ejecutores únicos';
         const tbody = document.getElementById('executorsTable');
         if (stats.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">No hay datos de ejecutores todavía</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-zinc-500">No hay datos todavía</td></tr>';
             return;
         }
-
         const maxCount = Math.max(...stats.map(s => s.count), 1);
         tbody.innerHTML = stats.map((s, i) => {
             const percent = Math.round((s.count / maxCount) * 100);
@@ -681,7 +611,7 @@ async function loadExecutorStats() {
             </tr>\`;
         }).join('');
     } catch {
-        document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar estadísticas</td></tr>';
+        document.getElementById('executorsTable').innerHTML = '<tr><td colspan="5" class="px-6 py-16 text-center text-red-400">Error al cargar</td></tr>';
     }
 }
 
@@ -690,16 +620,14 @@ async function loadLogs() {
         const res = await fetch('/api/executions', { headers: { 'x-panel-password': panelPass } });
         if (res.status === 401) return logout();
         const logs = await res.json();
-
         document.getElementById('logsCount').innerText = logs.length + ' registros';
         const tbody = document.getElementById('logsTable');
         if (logs.length === 0) {
             tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-16 text-center text-zinc-500">Nadie ha ejecutado scripts todavía</td></tr>';
             return;
         }
-
         tbody.innerHTML = logs.map(log => {
-            const date = new Date(log.createdAt).toLocaleString('es-ES', { 
+            const date = new Date(log.createdAt).toLocaleString('es-ES', {
                 day: '2-digit', month: '2-digit', year: 'numeric',
                 hour: '2-digit', minute: '2-digit', second: '2-digit'
             });
@@ -736,8 +664,8 @@ async function testWebhook() {
             headers: { 'x-panel-password': panelPass }
         });
         const data = await res.json();
-        if (data.success) alert('¡Mensaje de prueba enviado a Discord con éxito!');
-        else alert('Error al enviar notificación');
+        if (data.success) alert('¡Mensaje de prueba enviado a Discord!');
+        else alert('Error al enviar');
     } catch {
         alert('Error de conexión');
     }
@@ -769,11 +697,9 @@ async function saveScript() {
     const name = document.getElementById('scriptName').value.trim();
     const code = document.getElementById('scriptCode').value;
     if (!code) return alert('Pega el código primero');
-
     const btn = document.getElementById('saveBtn');
     btn.innerText = 'Ofuscando...';
     btn.disabled = true;
-
     try {
         const res = await fetch('/api/script', {
             method: 'POST',
@@ -781,7 +707,6 @@ async function saveScript() {
             body: JSON.stringify({ name, code })
         });
         const data = await res.json();
-
         if (data.id) {
             document.getElementById('resultOutput').value = \`loadstring(game:HttpGet("\${location.origin}/api/script/\${data.id}"))()\`;
             document.getElementById('scriptCode').value = '';
@@ -819,7 +744,7 @@ async function loadEditScript() {
             document.getElementById('editCode').value = script.rawCode || '';
         }
     } catch {
-        alert('Error al cargar script para editar');
+        alert('Error al cargar script');
     }
 }
 
@@ -829,11 +754,9 @@ async function updateScript() {
     const code = document.getElementById('editCode').value;
     if (!id) return alert('Selecciona un script');
     if (!code) return alert('Pega el nuevo código');
-
     const btn = document.getElementById('editBtn');
     btn.innerText = 'Actualizando...';
     btn.disabled = true;
-
     try {
         const res = await fetch('/api/script/' + id, {
             method: 'PUT',
@@ -871,7 +794,7 @@ async function deleteScript(id) {
 </script>
 </body>
 </html>
-    `);
+`);
 });
 
 app.listen(PORT, () => {
