@@ -90,12 +90,13 @@ function ultraObfuscate(rawCode) {
         pos += size;
     }
     const r = () => '_' + crypto.randomBytes(5).toString('hex');
-    const v = { k1: r(), k2: r(), k3: r(), k4: r(), ch: r(), d: r(), dec: r(), xor: r(), tmp: r(), a: r(), b: r() };
+    const v = { k1: r(), k2: r(), k3: r(), k4: r(), ch: r(), d: r(), dec: r(), xor: r(), tmp: r(), a: r(), b: r(), loader: r() };
+
     let junk = '';
     for (let i = 0; i < 110; i++) junk += `local ${r()}="${crypto.randomBytes(11).toString('hex')}"\n`;
     for (let i = 0; i < 30; i++) junk += `local function ${r()}() return ${Math.floor(Math.random()*99999)} end\n`;
 
-    return `-- [IKGONAVI HUB PRO - MAX]
+    return `-- [IKGONAVI HUB PRO - MAX v2]
 ${junk}
 local ${v.k1}={${Array.from(keys[0]).join(',')}}
 local ${v.k2}={${Array.from(keys[1]).join(',')}}
@@ -118,16 +119,20 @@ ${v.tmp}=${v.xor}(${v.tmp},${v.k4})
 ${v.tmp}=${v.xor}(${v.tmp},${v.k3})
 ${v.tmp}=${v.xor}(${v.tmp},${v.k2})
 ${v.tmp}=${v.xor}(${v.tmp},${v.k1})
-local ${v.a},${v.b}=pcall(function()
-    local loader = loadstring or load
-    if type(loader) ~= "function" then error("No loader available") end
-    return loader(${v.tmp})
-end)
-if ${v.a} and type(${v.b})=="function" then
+
+local ${v.loader} = loadstring or load
+if type(${v.loader}) ~= "function" then
+    error("This executor does not support loadstring/load")
+end
+
+local ${v.a}, ${v.b} = pcall(${v.loader}, ${v.tmp})
+if ${v.a} and type(${v.b}) == "function" then
     local ok, err = pcall(${v.b})
-    if not ok then error(tostring(err) or "Runtime error") end
+    if not ok then
+        error(tostring(err) or "Runtime error")
+    end
 else
-    error("Protected")
+    error("Protected / Failed to load")
 end
 `.trim();
 }
