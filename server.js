@@ -7,18 +7,21 @@ const helmet = require('helmet');
 const app = express();
 app.set('trust proxy', 1);
 
+// ====================== CONFIG ======================
 const PANEL_PASSWORD = process.env.PANEL_PASSWORD || "CambiaEstaContraseña123!";
-const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK || "";
+const WEBHOOK_ADMIN = process.env.WEBHOOK_ADMIN || "https://discord.com/api/webhooks/1535754404202942595/6TCxhQkieK0HWzKRdJAcg8xYWSfJ1odjrympGYvuCjVpxeeyc5fDrOowIqEiEStcb8Tl";
+const WEBHOOK_LOGGER = process.env.WEBHOOK_LOGGER || "https://discord.com/api/webhooks/1536889626701209682/lRvK__kPvssoBMsMHNAd9p2yp1gDsECy7wkqPRW3alI9ToPXlD9tfV-HuB77WWcT_d6H";
 const PORT = process.env.PORT || 3000;
-const TOKEN_TTL = 1000 * 60 * 60 * 6;
+const TOKEN_TTL = 1000 * 60 * 60 * 6; // 6 horas
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 120 }));
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: 'Demasiados intentos' } });
 const scriptLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: '-- Rate limit' });
 
+// ====================== SESIONES ======================
 const sessions = new Map();
 
 function createSession() {
@@ -42,9 +45,10 @@ function requireAuth(req, res, next) {
     next();
 }
 
+// ====================== DB ======================
 mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3VZH9aXK77wX@ikgmxer.8tj7kfa.mongodb.net/hubsilent?appName=ikgmxer")
-    .then(() => console.log("🔥 Hub activo"))
-    .catch(err => console.error("DB:", err.message));
+    .then(() => console.log("🔥 Ikgonavi Hub Pro activo"))
+    .catch(err => console.error("DB Error:", err.message));
 
 const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
     id: { type: String, default: () => crypto.randomBytes(16).toString('hex') },
@@ -62,20 +66,27 @@ const ExecutionModel = mongoose.model('HubExecution', new mongoose.Schema({
     createdAt: { type: Date, default: Date.now }
 }));
 
-async function sendDiscordLog(title, description, color = 0x5865F2) {
-    if (!DISCORD_WEBHOOK) return;
+// ====================== DISCORD ======================
+async function sendDiscordLog(webhook, title, description, color = 0x5865F2) {
+    if (!webhook) return;
     try {
-        await fetch(DISCORD_WEBHOOK, {
+        await fetch(webhook, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                embeds: [{ title, description, color, timestamp: new Date().toISOString(), footer: { text: "Ikgonavi Hub" } }]
+                embeds: [{
+                    title,
+                    description,
+                    color,
+                    timestamp: new Date().toISOString(),
+                    footer: { text: "Ikgonavi Hub Pro" }
+                }]
             })
         });
     } catch (e) {}
 }
 
-// ===== OFUSCADOR COMPATIBLE (funciona en casi todos los executors) =====
+// ====================== OFUSCADOR COMPATIBLE ======================
 function obfuscate(rawCode) {
     const key = crypto.randomBytes(8);
     let buf = Buffer.from(rawCode, 'utf8');
@@ -87,15 +98,12 @@ function obfuscate(rawCode) {
 
     const r = () => '_' + crypto.randomBytes(3).toString('hex');
     let junk = '';
-    for (let i = 0; i < 25; i++) junk += `local ${r()}="${crypto.randomBytes(6).toString('hex')}"\n`;
+    for (let i = 0; i < 30; i++) junk += `local ${r()}="${crypto.randomBytes(6).toString('hex')}"\n`;
 
-    const keyLua = Array.from(key).join(',');
-    const chunksLua = chunks.map(c => `"${c}"`).join(',');
-
-    return `-- IKGONAVI
+    return `-- IKGONAVI HUB
 ${junk}
-local K={${keyLua}}
-local C={${chunksLua}}
+local K={${Array.from(key).join(',')}}
+local C={${chunks.map(c => `"${c}"`).join(',')}}
 local D=table.concat(C)
 local function dec(data)
     if type(base64_decode)=="function" then return base64_decode(data) end
@@ -138,16 +146,16 @@ if type(fn)=="function" then fn() else error("fail") end
 `.trim();
 }
 
-// LOGIN
+// ====================== AUTH ======================
 app.post('/api/login', loginLimiter, (req, res) => {
     const { password } = req.body || {};
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
     if (!password || password !== PANEL_PASSWORD) {
-        sendDiscordLog("🚨 Login fallido", `IP: \`${ip}\``, 0xEF4444);
+        sendDiscordLog(WEBHOOK_ADMIN, "🚨 Login fallido", `IP: \`${ip}\``, 0xEF4444);
         return res.status(401).json({ error: 'Contraseña incorrecta' });
     }
     const token = createSession();
-    sendDiscordLog("✅ Login OK", `IP: \`${ip}\``, 0x10B981);
+    sendDiscordLog(WEBHOOK_ADMIN, "✅ Login OK", `IP: \`${ip}\``, 0x10B981);
     res.json({ token });
 });
 
@@ -156,6 +164,7 @@ app.post('/api/logout', requireAuth, (req, res) => {
     res.json({ success: true });
 });
 
+// ====================== API SCRIPTS ======================
 app.get('/api/scripts', requireAuth, async (req, res) => {
     try { res.json(await ScriptModel.find({}).sort({ createdAt: -1 })); }
     catch { res.status(500).json({ error: 'Error' }); }
@@ -167,7 +176,7 @@ app.post('/api/script', requireAuth, async (req, res) => {
         if (!code) return res.status(400).json({ error: 'Falta código' });
         const doc = new ScriptModel({ name: name || 'Sin nombre', code: obfuscate(code) });
         await doc.save();
-        sendDiscordLog("📜 Script creado", `**${doc.name}**`, 0x10B981);
+        sendDiscordLog(WEBHOOK_ADMIN, "📜 Script creado", `**${doc.name}**\nID: \`${doc.id}\``, 0x10B981);
         res.json({ id: doc.id });
     } catch (e) {
         console.error(e);
@@ -185,23 +194,25 @@ app.put('/api/script/:id', requireAuth, async (req, res) => {
             { new: true }
         );
         if (!s) return res.status(404).json({ error: 'No encontrado' });
+        sendDiscordLog(WEBHOOK_ADMIN, "🔄 Script editado", `**${s.name}**\nID: \`${s.id}\``, 0xF59E0B);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Error' }); }
 });
 
 app.delete('/api/script/:id', requireAuth, async (req, res) => {
     try {
-        await ScriptModel.findOneAndDelete({ id: req.params.id });
+        const s = await ScriptModel.findOneAndDelete({ id: req.params.id });
+        if (s) sendDiscordLog(WEBHOOK_ADMIN, "🗑️ Script borrado", `**${s.name}**\nID: \`${s.id}\``, 0xEF4444);
         res.json({ success: true });
     } catch { res.status(500).json({ error: 'Error' }); }
 });
 
-// ===== ENTREGA DEL SCRIPT (corregido para Roblox) =====
+// ====================== ENTREGA SCRIPT ======================
 app.get('/api/script/:id', scriptLimiter, async (req, res) => {
     const ua = (req.headers['user-agent'] || '').toLowerCase();
     const accept = (req.headers['accept'] || '').toLowerCase();
 
-    // Solo bloquear navegadores reales (no Roblox / executors)
+    // Solo bloquea navegadores reales (NO Roblox)
     const isRealBrowser =
         accept.includes('text/html') &&
         /mozilla|chrome|firefox|safari|edg|opera|brave/i.test(ua) &&
@@ -229,8 +240,21 @@ app.get('/api/script/:id', scriptLimiter, async (req, res) => {
 
         const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
         const userAgent = req.headers['user-agent'] || 'Desconocido';
-        await ExecutionModel.create({ scriptId: script.id, scriptName: script.name, ip, userAgent });
-        sendDiscordLog("📜 Ejecutado", `**${script.name}** · Exec: ${script.executions} · IP: \`${ip}\``, 0x57F287);
+
+        await ExecutionModel.create({
+            scriptId: script.id,
+            scriptName: script.name,
+            ip,
+            userAgent
+        });
+
+        // LOGGER webhook
+        sendDiscordLog(
+            WEBHOOK_LOGGER,
+            "📜 Script ejecutado",
+            `**${script.name}**\nID: \`${script.id}\`\nEjecuciones: ${script.executions}\nIP: \`${ip}\`\nUA: \`${userAgent.slice(0, 80)}\``,
+            0x57F287
+        );
 
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.send(script.code);
@@ -250,12 +274,12 @@ app.delete('/api/executions', requireAuth, async (req, res) => {
     catch { res.status(500).json({ error: 'Error' }); }
 });
 
-// PANEL
+// ====================== PANEL ======================
 app.get('/', (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="es"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ikgonavi Hub</title>
+<title>Ikgonavi Hub Pro</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>
 body{font-family:Inter,system-ui,sans-serif;background:#0b0c10;color:#e2e8f0}
@@ -268,7 +292,7 @@ body{font-family:Inter,system-ui,sans-serif;background:#0b0c10;color:#e2e8f0}
 <div class="glass w-full max-w-md p-10 rounded-3xl">
 <div class="text-center mb-8">
 <div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">⚡</div>
-<h1 class="text-2xl font-bold">Ikgonavi Hub</h1>
+<h1 class="text-2xl font-bold">Ikgonavi Hub Pro</h1>
 <p class="text-indigo-400 text-sm mt-1">Panel seguro</p>
 </div>
 <input type="password" id="passInput" placeholder="Contraseña" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 mb-4 outline-none focus:border-indigo-500">
@@ -294,7 +318,7 @@ body{font-family:Inter,system-ui,sans-serif;background:#0b0c10;color:#e2e8f0}
 <h2 class="text-2xl font-bold mb-6">Ofuscador</h2>
 <div class="glass rounded-2xl p-6 max-w-2xl">
 <input id="scriptName" placeholder="Nombre del script" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 mb-3 outline-none focus:border-indigo-500">
-<textarea id="scriptCode" placeholder="Pega tu código Lua aquí..." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 h-48 font-mono text-sm mb-3 outline-none focus:border-indigo-500 resize-none"></textarea>
+<textarea id="scriptCode" placeholder="Pega tu código Lua..." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 h-48 font-mono text-sm mb-3 outline-none focus:border-indigo-500 resize-none"></textarea>
 <button id="saveBtn" onclick="saveScript()" class="w-full bg-indigo-600 hover:bg-indigo-500 py-3 rounded-xl font-semibold">🔒 Ofuscar y Guardar</button>
 <textarea id="resultOutput" readonly placeholder="Aquí saldrá el loadstring..." class="w-full mt-4 bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 h-20 font-mono text-xs text-emerald-400 resize-none"></textarea>
 </div></div>
@@ -339,91 +363,4 @@ function login(){
   fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:p})})
   .then(r=>r.json().then(d=>({ok:r.ok,d})))
   .then(({ok,d})=>{
-    if(!ok){ document.getElementById('loginError').classList.remove('hidden'); return; }
-    token=d.token;
-    document.getElementById('loginScreen').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    document.getElementById('passInput').value='';
-    loadScripts();
-  }).catch(()=>alert('Error de conexión'));
-}
-function logout(){ token=''; location.reload(); }
-document.getElementById('passInput').addEventListener('keypress',e=>{ if(e.key==='Enter') login(); });
-function showPage(p){
-  document.querySelectorAll('.page').forEach(x=>x.classList.add('hidden'));
-  document.getElementById('page-'+p).classList.remove('hidden');
-  document.querySelectorAll('.sidebar-btn').forEach(b=>{ b.classList.remove('active'); b.classList.add('text-zinc-400'); });
-  const a=document.getElementById('nav-'+p); if(a){ a.classList.add('active'); a.classList.remove('text-zinc-400'); }
-  if(['scripts','edit','executions'].includes(p)) loadScripts();
-  if(p==='logs') loadLogs();
-}
-function esc(t){ const d=document.createElement('div'); d.textContent=t||''; return d.innerHTML; }
-async function loadScripts(){
-  try{
-    const r=await fetch('/api/scripts',{headers:authHeaders()});
-    if(r.status===401) return logout();
-    allScripts=await r.json();
-    document.getElementById('scriptCount').innerText=allScripts.length+' scripts';
-    document.getElementById('scriptsList').innerHTML=allScripts.map(s=>{
-      const ls=\`loadstring(game:HttpGet("\${location.origin}/api/script/\${s.id}"))()\`;
-      return \`<div class="glass rounded-xl p-5"><div class="flex justify-between mb-2"><div><div class="font-semibold text-indigo-300">\${esc(s.name)}</div><div class="text-xs text-zinc-500">\${s.executions||0} ejecuciones</div></div>
-      <button onclick="deleteScript('\${s.id}')" class="text-xs text-red-400">Borrar</button></div>
-      <textarea readonly class="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-2 text-xs font-mono h-14 resize-none">\${ls}</textarea>
-      <button onclick="navigator.clipboard.writeText('\${ls}');this.innerText='¡Copiado!'" class="mt-2 w-full bg-indigo-600 py-2 rounded-lg text-sm">Copiar loadstring</button></div>\`;
-    }).join('')||'<p class="text-zinc-500 text-center py-12">No hay scripts</p>';
-    updateStats();
-    document.getElementById('editSelect').innerHTML='<option value="">-- Elige --</option>'+allScripts.map(s=>\`<option value="\${s.id}">\${esc(s.name)}</option>\`).join('');
-  }catch{}
-}
-function updateStats(){
-  const total=allScripts.reduce((a,s)=>a+(s.executions||0),0);
-  const top=[...allScripts].sort((a,b)=>(b.executions||0)-(a.executions||0))[0];
-  document.getElementById('statTotal').innerText=allScripts.length;
-  document.getElementById('statExecutions').innerText=total;
-  document.getElementById('statTop').innerText=top?(top.name||'—'):'—';
-  document.getElementById('executionsTable').innerHTML=[...allScripts].sort((a,b)=>(b.executions||0)-(a.executions||0)).map((s,i)=>
-    \`<tr class="border-t border-white/5"><td class="px-5 py-3">\${i+1}</td><td class="px-5 py-3 text-indigo-300">\${esc(s.name)}</td><td class="px-5 py-3 text-emerald-400 font-bold">\${s.executions||0}</td></tr>\`
-  ).join('');
-}
-async function loadLogs(){
-  const r=await fetch('/api/executions',{headers:authHeaders()});
-  if(r.status===401) return logout();
-  const logs=await r.json();
-  document.getElementById('logsTable').innerHTML=logs.map(l=>{
-    const d=new Date(l.createdAt).toLocaleString('es-ES');
-    return \`<tr class="border-t border-white/5"><td class="px-5 py-2 text-zinc-400 text-xs">\${d}</td><td class="px-5 py-2 text-indigo-300">\${esc(l.scriptName)}</td><td class="px-5 py-2 font-mono text-emerald-400 text-xs">\${l.ip||'?'}</td><td class="px-5 py-2 text-xs text-zinc-500">\${esc((l.userAgent||'').slice(0,40))}</td></tr>\`;
-  }).join('')||'<tr><td colspan="4" class="px-5 py-12 text-center text-zinc-500">Sin datos</td></tr>';
-}
-async function clearLogs(){ if(!confirm('¿Borrar logs?'))return; await fetch('/api/executions',{method:'DELETE',headers:authHeaders()}); loadLogs(); }
-async function saveScript(){
-  const name=document.getElementById('scriptName').value.trim();
-  const code=document.getElementById('scriptCode').value;
-  if(!code) return alert('Pega el código');
-  const btn=document.getElementById('saveBtn'); btn.innerText='Ofuscando...'; btn.disabled=true;
-  try{
-    const r=await fetch('/api/script',{method:'POST',headers:authHeaders(),body:JSON.stringify({name,code})});
-    const d=await r.json();
-    if(d.id){
-      document.getElementById('resultOutput').value=\`loadstring(game:HttpGet("\${location.origin}/api/script/\${d.id}"))()\`;
-      document.getElementById('scriptCode').value=''; document.getElementById('scriptName').value='';
-      btn.innerText='¡Listo!'; setTimeout(()=>{btn.innerText='🔒 Ofuscar y Guardar';btn.disabled=false},1200);
-      loadScripts();
-    } else { alert(d.error||'Error'); btn.disabled=false; btn.innerText='🔒 Ofuscar y Guardar'; }
-  }catch{ alert('Error'); btn.disabled=false; btn.innerText='🔒 Ofuscar y Guardar'; }
-}
-async function updateScript(){
-  const id=document.getElementById('editSelect').value;
-  const name=document.getElementById('editName').value.trim();
-  const code=document.getElementById('editCode').value;
-  if(!id||!code) return alert('Elige script y pega código nuevo');
-  const btn=document.getElementById('editBtn'); btn.innerText='Guardando...'; btn.disabled=true;
-  const r=await fetch('/api/script/'+id,{method:'PUT',headers:authHeaders(),body:JSON.stringify({name,code})});
-  const d=await r.json();
-  if(d.success){ btn.innerText='¡OK!'; setTimeout(()=>{btn.innerText='💾 Guardar';btn.disabled=false},1200); document.getElementById('editCode').value=''; loadScripts(); }
-  else { alert('Error'); btn.disabled=false; btn.innerText='💾 Guardar'; }
-}
-async function deleteScript(id){ if(!confirm('¿Borrar?'))return; await fetch('/api/script/'+id,{method:'DELETE',headers:authHeaders()}); loadScripts(); }
-</script></body></html>`);
-});
-
-app.listen(PORT, () => console.log("🚀 Puerto", PORT));
+    if(!ok){ document.getElementById('loginError').classList.remove('hidden');
