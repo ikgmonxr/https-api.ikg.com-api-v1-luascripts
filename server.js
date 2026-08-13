@@ -168,7 +168,7 @@ app.get('/api/script/:id', scriptLimiter, async (req, res) => {
         !/roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|inet/i.test(ua);
 
     if (isBrowser) {
-        return res.status(403).type('text/html').send('<!DOCTYPE html><html><body style="background:#0a0a0f;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1>Endpoint protegido</h1><p>Solo para Roblox</p><a href="/" style="color:#818cf8">Volver</a></div></body></html>');
+        return res.status(403).type('text/html').send('<!DOCTYPE html><html><body style="background:#0a0a0f;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1>Endpoint protegido</h1><p>Solo para Roblox</p><a href="https://ikgonavihub.vercel.app" style="color:#818cf8">Volver</a></div></body></html>');
     }
 
     try {
