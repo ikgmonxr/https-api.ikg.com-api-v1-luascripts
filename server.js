@@ -38,7 +38,7 @@ function requireAuth(req, res, next) {
 }
 
 mongoose.connect(process.env.MONGO_URI || "mongodb+srv://yarishdz2_db_user:7cp3VZH9aXK77wX@ikgmxer.8tj7kfa.mongodb.net/hubsilent?appName=ikgmxer")
-    .then(() => console.log("🔥 Hub activo"))
+    .then(() => console.log("Hub activo"))
     .catch(err => console.error("DB:", err.message));
 
 const ScriptModel = mongoose.model('HubScript', new mongoose.Schema({
@@ -69,17 +69,34 @@ async function sendLog(webhook, title, description, color) {
 }
 
 function obfuscate(rawCode) {
+    const protectedCode = [
+        'local function __atk()',
+        'local function die() while true do end end',
+        'if type(debug)=="table" then',
+        'if type(debug.getinfo)=="function" or type(debug.getupvalue)=="function" or type(debug.getconstants)=="function" or type(debug.getproto)=="function" or type(debug.getstack)=="function" or type(debug.setupvalue)=="function" then die() end',
+        'end',
+        'if type(getgc)=="function" or type(getreg)=="function" or type(getprotos)=="function" or type(getconstants)=="function" or type(getupvalues)=="function" or type(getinfo)=="function" then die() end',
+        'if (type(hookfunction)=="function" or type(hookmetamethod)=="function") and (type(getgc)=="function" or (type(debug)=="table" and type(debug.getinfo)=="function")) then die() end',
+        'if type(game)~="userdata" and typeof and typeof(game)=="table" then die() end',
+        'local ok,plrs=pcall(function() return game:GetService("Players") end)',
+        'if not ok or not plrs then die() end',
+        'end',
+        '__atk()',
+        '',
+        rawCode
+    ].join('\n');
+
     const key = crypto.randomBytes(8);
-    let buf = Buffer.from(rawCode, 'utf8');
+    let buf = Buffer.from(protectedCode, 'utf8');
     for (let i = 0; i < buf.length; i++) buf[i] ^= key[i % key.length];
     const b64 = buf.toString('base64');
     const chunks = [];
     for (let i = 0; i < b64.length; i += 40) chunks.push(b64.slice(i, i + 40));
     const r = () => '_' + crypto.randomBytes(3).toString('hex');
     let junk = '';
-    for (let i = 0; i < 25; i++) junk += 'local ' + r() + '="' + crypto.randomBytes(6).toString('hex') + '"\n';
+    for (let i = 0; i < 28; i++) junk += 'local ' + r() + '="' + crypto.randomBytes(6).toString('hex') + '"\n';
 
-    return ('-- IKGONAVI\n' + junk +
+    return ('-- IKGONAVI PROTECTED\n' + junk +
 'local K={' + Array.from(key).join(',') + '}\n' +
 'local C={' + chunks.map(c => '"' + c + '"').join(',') + '}\n' +
 'local D=table.concat(C)\n' +
@@ -95,7 +112,7 @@ function obfuscate(rawCode) {
 'local function xorstr(str,key) local out={} for i=1,#str do out[i]=string.char(bxor(string.byte(str,i),key[((i-1)%#key)+1])) end return table.concat(out) end\n' +
 'local src=xorstr(dec(D),K)\n' +
 'local fn=loadstring(src)\n' +
-'if type(fn)=="function" then fn() else error("fail") end'
+'if type(fn)=="function" then fn() else error("protected") end'
     );
 }
 
@@ -168,7 +185,7 @@ app.get('/api/script/:id', scriptLimiter, async (req, res) => {
         !/roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|inet/i.test(ua);
 
     if (isBrowser) {
-        return res.status(403).type('text/html').send('<!DOCTYPE html><html><body style="background:#0a0a0f;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1>Endpoint protegido</h1><p>Solo para Roblox</p><a href="https://ikgonavihub.vercel.app" style="color:#818cf8">Volver</a></div></body></html>');
+        return res.status(403).type('text/html').send('<!DOCTYPE html><html><body style="background:#0a0a0f;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1>Endpoint protegido</h1><p>Solo para Roblox</p><a href="/" style="color:#818cf8">Volver</a></div></body></html>');
     }
 
     try {
@@ -208,7 +225,7 @@ app.get('/', (req, res) => {
 <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
 <div class="glass w-full max-w-md p-10 rounded-3xl">
 <div class="text-center mb-8"><div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">⚡</div>
-<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Panel seguro</p></div>
+<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Protected</p></div>
 <input type="password" id="passInput" placeholder="Contraseña" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 mb-4 outline-none">
 <button onclick="login()" class="w-full bg-indigo-600 py-4 rounded-2xl font-semibold">Entrar</button>
 <p id="loginError" class="text-red-400 text-sm text-center mt-4 hidden">Contraseña incorrecta</p>
@@ -227,7 +244,7 @@ app.get('/', (req, res) => {
 </aside>
 <main class="ml-64 flex-1 p-8">
 <div id="page-obfuscator" class="page">
-<h2 class="text-2xl font-bold mb-6">Ofuscador</h2>
+<h2 class="text-2xl font-bold mb-6">Ofuscador + Anti-Tamper</h2>
 <div class="glass rounded-2xl p-6 max-w-2xl">
 <input id="scriptName" placeholder="Nombre" class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 mb-3">
 <textarea id="scriptCode" placeholder="Codigo Lua..." class="w-full bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 h-48 font-mono text-sm mb-3 resize-none"></textarea>
@@ -340,4 +357,4 @@ async function deleteScript(id){if(!confirm('Borrar?'))return;await fetch('/api/
 </script></body></html>`);
 });
 
-app.listen(PORT, () => console.log('Hub en puerto', PORT));
+app.listen(PORT, () => console.log('Hub puerto', PORT));
