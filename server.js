@@ -10,6 +10,7 @@ app.set('trust proxy', 1);
 const PANEL_PASSWORD = process.env.PANEL_PASSWORD || "CambiaEstaContraseña123!";
 const WEBHOOK_ADMIN = process.env.WEBHOOK_ADMIN || "https://discord.com/api/webhooks/1535754404202942595/6TCxhQkieK0HWzKRdJAcg8xYWSfJ1odjrympGYvuCjVpxeeyc5fDrOowIqEiEStcb8Tl";
 const WEBHOOK_LOGGER = process.env.WEBHOOK_LOGGER || "https://discord.com/api/webhooks/1536889626701209682/lRvK__kPvssoBMsMHNAd9p2yp1gDsECy7wkqPRW3alI9ToPXlD9tfV-HuB77WWcT_d6H";
+const PANEL_URL = process.env.PANEL_URL || "https://ikgonavihub.vercel.app/";
 const PORT = process.env.PORT || 3000;
 const TOKEN_TTL = 1000 * 60 * 60 * 6;
 
@@ -18,7 +19,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: 'Demasiados intentos' } });
-const scriptLimiter = rateLimit({ windowMs: 60 * 1000, max: 20, message: '-- Rate limit' });
+const scriptLimiter = rateLimit({ windowMs: 60 * 1000, max: 25, message: '-- Rate limit' });
 
 const sessions = new Map();
 function createSession() {
@@ -68,6 +69,19 @@ async function sendLog(webhook, title, description, color) {
     } catch (e) {}
 }
 
+function makeTrapCode() {
+    const a = crypto.randomBytes(8).toString('hex');
+    const b = crypto.randomBytes(10).toString('hex');
+    const c = crypto.randomBytes(6).toString('hex');
+    return `-- IKGONAVI PROTECTED
+local _${a}="${b}"
+local function _${c}(s) return s end
+print("Access denied")
+error("protected")
+while true do end
+`;
+}
+
 function obfuscate(rawCode) {
     const key = crypto.randomBytes(8);
     let buf = Buffer.from(rawCode, 'utf8');
@@ -97,6 +111,25 @@ function obfuscate(rawCode) {
 'local fn=loadstring(src)\n' +
 'if type(fn)=="function" then fn() else error("fail") end'
     );
+}
+
+function classifyClient(req) {
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const accept = (req.headers['accept'] || '').toLowerCase();
+    const ref = (req.headers['referer'] || '').toLowerCase();
+
+    const isExecutor = /roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|script-ware|hydrogen|codex|inet/i.test(ua);
+    const isBrowser = !isExecutor && (
+        accept.includes('text/html') ||
+        /mozilla|chrome|firefox|safari|edg|opera|brave|msie|trident/i.test(ua)
+    );
+    const isScraper = !isExecutor && (
+        /python|axios|curl|wget|postman|insomnia|bot|crawler|spider|scraper|node-fetch|go-http|java\/|ruby|php|httpclient|libwww|scrapy|puppeteer|playwright|selenium/i.test(ua) ||
+        ua === '' ||
+        ua === '-'
+    );
+
+    return { ua, accept, ref, isExecutor, isBrowser, isScraper };
 }
 
 app.post('/api/login', loginLimiter, (req, res) => {
@@ -160,26 +193,51 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
+// ===== ENTREGA CON ANTI-SCRAPING =====
 app.get('/api/script/:id', scriptLimiter, async (req, res) => {
-    const ua = (req.headers['user-agent'] || '').toLowerCase();
-    const accept = (req.headers['accept'] || '').toLowerCase();
-    const isBrowser = accept.includes('text/html') &&
-        /mozilla|chrome|firefox|safari|edg|opera|brave/i.test(ua) &&
-        !/roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|inet/i.test(ua);
+    const client = classifyClient(req);
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
 
-    if (isBrowser) {
-        return res.status(403).type('text/html').send('<!DOCTYPE html><html><body style="background:#0a0a0f;color:#fff;font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0"><div style="text-align:center"><h1>Endpoint protegido</h1><p>Solo para Roblox</p><a href="/" style="color:#818cf8">Volver</a></div></body></html>');
+    // 1) Navegador real -> redirect al panel
+    if (client.isBrowser) {
+        sendLog(WEBHOOK_ADMIN, 'Browser bloqueado', 'IP: `' + ip + '`\nUA: `' + client.ua.slice(0, 80) + '`', 0xF59E0B);
+        return res.redirect(302, PANEL_URL);
     }
 
+    // 2) Scraper / bot / UA vacio -> codigo trampa
+    if (client.isScraper) {
+        sendLog(WEBHOOK_ADMIN, 'Scraper bloqueado', 'IP: `' + ip + '`\nUA: `' + (client.ua || 'empty') + '`', 0xEF4444);
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        return res.type('text/plain').send(makeTrapCode());
+    }
+
+    // 3) Executor / Roblox -> codigo real
     try {
         const script = await ScriptModel.findOne({ id: req.params.id });
         if (!script) return res.status(404).type('text/plain').send('-- No encontrado');
+
         script.executions += 1;
         await script.save();
-        const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
+
         const userAgent = req.headers['user-agent'] || 'Desconocido';
-        await ExecutionModel.create({ scriptId: script.id, scriptName: script.name, ip, userAgent });
-        sendLog(WEBHOOK_LOGGER, 'Script ejecutado', '**' + script.name + '**\nExec: ' + script.executions + '\nIP: `' + ip + '`\nUA: `' + userAgent.slice(0, 60) + '`', 0x57F287);
+        await ExecutionModel.create({
+            scriptId: script.id,
+            scriptName: script.name,
+            ip,
+            userAgent
+        });
+
+        sendLog(
+            WEBHOOK_LOGGER,
+            'Script ejecutado',
+            '**' + script.name + '**\nExec: ' + script.executions + '\nIP: `' + ip + '`\nUA: `' + userAgent.slice(0, 60) + '`',
+            0x57F287
+        );
+
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
         res.type('text/plain').send(script.code);
     } catch (e) {
         console.error(e);
@@ -208,7 +266,7 @@ app.get('/', (req, res) => {
 <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
 <div class="glass w-full max-w-md p-10 rounded-3xl">
 <div class="text-center mb-8"><div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">⚡</div>
-<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Panel seguro</p></div>
+<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Anti-Scrape</p></div>
 <input type="password" id="passInput" placeholder="Contraseña" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 mb-4 outline-none">
 <button onclick="login()" class="w-full bg-indigo-600 py-4 rounded-2xl font-semibold">Entrar</button>
 <p id="loginError" class="text-red-400 text-sm text-center mt-4 hidden">Contraseña incorrecta</p>
@@ -340,4 +398,4 @@ async function deleteScript(id){if(!confirm('Borrar?'))return;await fetch('/api/
 </script></body></html>`);
 });
 
-app.listen(PORT, () => console.log('Hub puerto', PORT));
+app.listen(PORT, () => console.log('Hub anti-scrape en puerto', PORT));
