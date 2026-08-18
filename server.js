@@ -16,7 +16,7 @@ const TOKEN_TTL = 1000 * 60 * 60 * 6;
 
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json({ limit: '1mb' }));
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 100 }));
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 120 }));
 
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 8, message: { error: 'Demasiados intentos' } });
 const scriptLimiter = rateLimit({ windowMs: 60 * 1000, max: 25, message: '-- Rate limit' });
@@ -69,17 +69,33 @@ async function sendLog(webhook, title, description, color) {
     } catch (e) {}
 }
 
+function send405(res) {
+    res.status(405).type('html').send(`<!doctype html>
+<html lang=en>
+<title>405 Method Not Allowed</title>
+<h1>Method Not Allowed</h1>
+<p>The method is not allowed for the requested URL.</p>
+`);
+}
+
 function makeTrapCode() {
     const a = crypto.randomBytes(8).toString('hex');
     const b = crypto.randomBytes(10).toString('hex');
-    const c = crypto.randomBytes(6).toString('hex');
     return `-- IKGONAVI PROTECTED
 local _${a}="${b}"
-local function _${c}(s) return s end
 print("Access denied")
 error("protected")
 while true do end
 `;
+}
+
+function classifyClient(req) {
+    const ua = (req.headers['user-agent'] || '').toLowerCase();
+    const accept = (req.headers['accept'] || '').toLowerCase();
+    const isExecutor = /roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|script-ware|hydrogen|codex|inet/i.test(ua);
+    const isBrowser = !isExecutor && (accept.includes('text/html') || /mozilla|chrome|firefox|safari|edg|opera|brave|msie|trident/i.test(ua));
+    const isScraper = !isExecutor && (/python|axios|curl|wget|postman|insomnia|bot|crawler|spider|scraper|node-fetch|go-http|java\/|ruby|php|httpclient|libwww|scrapy|puppeteer|playwright|selenium/i.test(ua) || ua === '' || ua === '-');
+    return { ua, isExecutor, isBrowser, isScraper };
 }
 
 function obfuscate(rawCode) {
@@ -113,23 +129,41 @@ function obfuscate(rawCode) {
     );
 }
 
-function classifyClient(req) {
-    const ua = (req.headers['user-agent'] || '').toLowerCase();
-    const accept = (req.headers['accept'] || '').toLowerCase();
-    const ref = (req.headers['referer'] || '').toLowerCase();
+async function deliverScript(req, res, scriptId) {
+    const client = classifyClient(req);
+    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
 
-    const isExecutor = /roblox|synapse|krnl|fluxus|solara|wave|electron|delta|executor|script-ware|hydrogen|codex|inet/i.test(ua);
-    const isBrowser = !isExecutor && (
-        accept.includes('text/html') ||
-        /mozilla|chrome|firefox|safari|edg|opera|brave|msie|trident/i.test(ua)
-    );
-    const isScraper = !isExecutor && (
-        /python|axios|curl|wget|postman|insomnia|bot|crawler|spider|scraper|node-fetch|go-http|java\/|ruby|php|httpclient|libwww|scrapy|puppeteer|playwright|selenium/i.test(ua) ||
-        ua === '' ||
-        ua === '-'
-    );
+    if (client.isBrowser) {
+        sendLog(WEBHOOK_ADMIN, 'Browser bloqueado', 'IP: `' + ip + '`\nPath: `' + req.path + '`', 0xF59E0B);
+        return res.redirect(302, PANEL_URL);
+    }
 
-    return { ua, accept, ref, isExecutor, isBrowser, isScraper };
+    if (client.isScraper) {
+        sendLog(WEBHOOK_ADMIN, 'Scraper bloqueado', 'IP: `' + ip + '`\nPath: `' + req.path + '`\nUA: `' + (client.ua || 'empty') + '`', 0xEF4444);
+        res.setHeader('Cache-Control', 'no-store');
+        res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+        return res.type('text/plain').send(makeTrapCode());
+    }
+
+    try {
+        const script = await ScriptModel.findOne({ id: scriptId });
+        if (!script) return res.status(404).type('text/plain').send('-- No encontrado');
+
+        script.executions += 1;
+        await script.save();
+
+        const userAgent = req.headers['user-agent'] || 'Desconocido';
+        await ExecutionModel.create({ scriptId: script.id, scriptName: script.name, ip, userAgent });
+        sendLog(WEBHOOK_LOGGER, 'Script ejecutado', '**' + script.name + '**\nExec: ' + script.executions + '\nIP: `' + ip + '`\nUA: `' + userAgent.slice(0, 60) + '`', 0x57F287);
+
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.type('text/plain').send(script.code);
+    } catch (e) {
+        console.error(e);
+        res.status(500).type('text/plain').send('-- Error');
+    }
 }
 
 app.post('/api/login', loginLimiter, (req, res) => {
@@ -193,57 +227,27 @@ app.delete('/api/script/:id', requireAuth, async (req, res) => {
     } catch (e) { res.status(500).json({ error: 'Error' }); }
 });
 
-// ===== ENTREGA CON ANTI-SCRAPING =====
+// Loadstring principal
 app.get('/api/script/:id', scriptLimiter, async (req, res) => {
-    const client = classifyClient(req);
-    const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '?';
-
-    // 1) Navegador real -> redirect al panel
-    if (client.isBrowser) {
-        sendLog(WEBHOOK_ADMIN, 'Browser bloqueado', 'IP: `' + ip + '`\nUA: `' + client.ua.slice(0, 80) + '`', 0xF59E0B);
-        return res.redirect(302, PANEL_URL);
-    }
-
-    // 2) Scraper / bot / UA vacio -> codigo trampa
-    if (client.isScraper) {
-        sendLog(WEBHOOK_ADMIN, 'Scraper bloqueado', 'IP: `' + ip + '`\nUA: `' + (client.ua || 'empty') + '`', 0xEF4444);
-        res.setHeader('Cache-Control', 'no-store');
-        res.setHeader('X-Robots-Tag', 'noindex, nofollow');
-        return res.type('text/plain').send(makeTrapCode());
-    }
-
-    // 3) Executor / Roblox -> codigo real
-    try {
-        const script = await ScriptModel.findOne({ id: req.params.id });
-        if (!script) return res.status(404).type('text/plain').send('-- No encontrado');
-
-        script.executions += 1;
-        await script.save();
-
-        const userAgent = req.headers['user-agent'] || 'Desconocido';
-        await ExecutionModel.create({
-            scriptId: script.id,
-            scriptName: script.name,
-            ip,
-            userAgent
-        });
-
-        sendLog(
-            WEBHOOK_LOGGER,
-            'Script ejecutado',
-            '**' + script.name + '**\nExec: ' + script.executions + '\nIP: `' + ip + '`\nUA: `' + userAgent.slice(0, 60) + '`',
-            0x57F287
-        );
-
-        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-        res.setHeader('Pragma', 'no-cache');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.type('text/plain').send(script.code);
-    } catch (e) {
-        console.error(e);
-        res.status(500).type('text/plain').send('-- Error');
-    }
+    return deliverScript(req, res, req.params.id);
 });
+
+// GET get_hub -> 405 o redirect
+app.get('/api/v2/get_hub', scriptLimiter, (req, res) => {
+    const client = classifyClient(req);
+    if (client.isBrowser) return res.redirect(302, PANEL_URL);
+    return send405(res);
+});
+
+// POST get_hub -> script real si manda id
+app.post('/api/v2/get_hub', scriptLimiter, async (req, res) => {
+    const id = (req.body && req.body.id) || req.query.id;
+    if (!id) return send405(res);
+    return deliverScript(req, res, id);
+});
+
+// Otros metodos en get_hub -> 405
+app.all('/api/v2/get_hub', (req, res) => send405(res));
 
 app.get('/api/executions', requireAuth, async (req, res) => {
     try { res.json(await ExecutionModel.find().sort({ createdAt: -1 }).limit(100)); }
@@ -266,7 +270,7 @@ app.get('/', (req, res) => {
 <div id="loginScreen" class="min-h-screen flex items-center justify-center p-4">
 <div class="glass w-full max-w-md p-10 rounded-3xl">
 <div class="text-center mb-8"><div class="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-4">⚡</div>
-<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Anti-Scrape</p></div>
+<h1 class="text-2xl font-bold">Ikgonavi Hub</h1><p class="text-indigo-400 text-sm mt-1">Anti-Scrape v2</p></div>
 <input type="password" id="passInput" placeholder="Contraseña" autocomplete="off" class="w-full bg-zinc-900 border border-zinc-700 rounded-2xl px-5 py-4 mb-4 outline-none">
 <button onclick="login()" class="w-full bg-indigo-600 py-4 rounded-2xl font-semibold">Entrar</button>
 <p id="loginError" class="text-red-400 text-sm text-center mt-4 hidden">Contraseña incorrecta</p>
@@ -398,4 +402,4 @@ async function deleteScript(id){if(!confirm('Borrar?'))return;await fetch('/api/
 </script></body></html>`);
 });
 
-app.listen(PORT, () => console.log('Hub anti-scrape en puerto', PORT));
+app.listen(PORT, () => console.log('Hub anti-scrape v2 puerto', PORT));
